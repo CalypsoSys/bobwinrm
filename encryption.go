@@ -12,9 +12,9 @@ import (
 	"strconv"
 	"strings"
 
-	ntlmssp "github.com/CalypsoSys/bobntlmssp"
-	ntlmhttp "github.com/CalypsoSys/bobntlmssp/http"
 	"github.com/CalypsoSys/bobwinrm/soap"
+	"github.com/bodgit/ntlmssp"
+	ntlmhttp "github.com/bodgit/ntlmssp/http"
 )
 
 type Encryption struct {
@@ -94,7 +94,6 @@ func (e *Encryption) Post(client *Client, message *soap.SoapMessage) (string, er
 
 	e.ntlmClient, _ = ntlmssp.NewClient(ntlmssp.SetUserInfo(userName, client.password), ntlmssp.SetDomain(domain), ntlmssp.SetVersion(ntlmssp.DefaultVersion()))
 	e.ntlmhttp, _ = ntlmhttp.NewClient(e.httpClient, e.ntlmClient)
-	e.ntlmhttp.Debug = false
 
 	var err error
 	if err = e.PrepareRequest(client, client.url); err == nil {
