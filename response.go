@@ -2,7 +2,6 @@ package winrm
 
 import (
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -12,7 +11,6 @@ import (
 	"github.com/ChrisTrenkamp/goxpath"
 	"github.com/ChrisTrenkamp/goxpath/tree"
 	"github.com/ChrisTrenkamp/goxpath/tree/xmltree"
-	"github.com/CalypsoSys/bobwinrm/soap"
 )
 
 type ExecuteCommandError struct {
