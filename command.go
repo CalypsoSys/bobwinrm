@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"strings"
 	"sync"
 )
@@ -152,6 +153,11 @@ func (c *Command) slurpAllOutput() (bool, error) {
 
 	response, err := c.client.sendRequest(request)
 	if err != nil {
+		var errWithTimeout *url.Error
+		if errors.As(err, &errWithTimeout) && errWithTimeout.Timeout() {
+			// Operation timeout because the server didn't respond in time
+			return false, err
+		}
 		if strings.Contains(err.Error(), "OperationTimeout") {
 			// Operation timeout because there was no command output
 			return false, err
@@ -203,6 +209,11 @@ func (c *Command) sendInput(data []byte, eof bool) error {
 // ExitCode returns command exit code when it is finished. Before that the result is always 0.
 func (c *Command) ExitCode() int {
 	return c.exitCode
+}
+
+// Error returns command execution error if any
+func (c *Command) Error() error {
+	return c.err
 }
 
 // Wait function will block the current goroutine until the remote command terminates.

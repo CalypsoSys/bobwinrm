@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -46,6 +46,40 @@ var (
 	        <rsp:ShellRunTime>P0DT0H0M1S</rsp:ShellRunTime>
 	        <rsp:ShellInactivity>P0DT0H0M1S</rsp:ShellInactivity>
 	    </rsp:Shell>
+	</s:Body>
+	</s:Envelope>`
+
+	createShellResponseWithError = `<s:Envelope xml:lang="en-US"
+	xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+	xmlns:a="http://schemas.xmlsoap.org/ws/2004/08/addressing"
+	xmlns:x="http://schemas.xmlsoap.org/ws/2004/09/transfer"
+	xmlns:e="http://schemas.xmlsoap.org/ws/2004/08/eventing"
+	xmlns:n="http://schemas.xmlsoap.org/ws/2004/09/enumeration"
+	xmlns:w="http://schemas.dmtf.org/wbem/wsman/1/wsman.xsd"
+	xmlns:p="http://schemas.microsoft.com/wbem/wsman/1/wsman.xsd">
+	<s:Header>
+	    <a:Action>http://schemas.dmtf.org/wbem/wsman/1/wsman/fault</a:Action>
+	    <a:MessageID>uuid:0A888267-33ED-4F08-98E6-DDEBDE2067DE</a:MessageID>
+	    <a:To>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</a:To>
+	    <a:RelatesTo>uuid:1893210b-91a7-45dc-aa90-b0c42e0dd740</a:RelatesTo>
+	</s:Header>
+	<s:Body>
+	    <s:Fault>
+	        <s:Code>
+	            <s:Value>s:Receiver</s:Value>
+	            <s:Subcode><s:Value>w:InternalError</s:Value></s:Subcode>
+	        </s:Code>
+	        <s:Reason>
+	            <s:Text xml:lang="en-US">Illegal operation attempted on a registry key that has been marked for deletion. </s:Text>
+	        </s:Reason>
+	        <s:Detail>
+	            <f:WSManFault xmlns:f="http://schemas.microsoft.com/wbem/wsman/1/wsmanfault" Code="2147943418" Machine="34.134.189.249">
+	                <f:Message>
+	                    <f:ProviderFault provider="Shell cmd plugin" path="%!s(MISSING)ystemroot%!\(MISSING)system32\winrscmd.dll">Illegal operation attempted on a registry key that has been marked for deletion. </f:ProviderFault>
+	                </f:Message>
+	            </f:WSManFault>
+	        </s:Detail>
+	    </s:Fault>
 	</s:Body>
 	</s:Envelope>`
 
@@ -128,7 +162,7 @@ func runWinRMFakeServer(c *C, expectedStdin string) (*httptest.Server, string, i
 	count := 0
 	return StartTestServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/soap+xml")
-		b, err := ioutil.ReadAll(r.Body)
+		b, err := io.ReadAll(r.Body)
 		defer r.Body.Close()
 		if err != nil {
 			c.Fail()

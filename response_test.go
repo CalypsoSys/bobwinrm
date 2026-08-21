@@ -17,6 +17,20 @@ func (s *WinRMSuite) TestOpenShellResponse(c *C) {
 	c.Assert("67A74734-DD32-4F10-89DE-49A060483810", Equals, shellID)
 }
 
+func (s *WinRMSuite) TestOpenShellResponseError(c *C) {
+	response := createShellResponseWithError
+	shellId, err := ParseOpenShellResponse(response)
+	if err == nil {
+		c.Fatal("expected error")
+	}
+	c.Assert(shellId, Equals, "")
+
+	var execCmdRespErr *ExecuteCommandError
+	if !errors.As(err, &execCmdRespErr) {
+		c.Fatal("expected err to be of type ExecuteCommandError")
+	}
+}
+
 func (s *WinRMSuite) TestExecuteCommandResponse(c *C) {
 	response := executeCommandResponse
 

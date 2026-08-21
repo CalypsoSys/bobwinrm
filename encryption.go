@@ -5,15 +5,15 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 
-	"github.com/CalypsoSys/bobwinrm/soap"
 	"github.com/bodgit/ntlmssp"
 	ntlmhttp "github.com/bodgit/ntlmssp/http"
+	"github.com/CalypsoSys/bobwinrm/soap"
 )
 
 type Encryption struct {
@@ -35,20 +35,23 @@ const (
 /*
 Encrypted Message Types
 When using Encryption, there are three options available
-	1. Negotiate/SPNEGO
-	2. Kerberos
-	3. CredSSP
 
-	protocol: The protocol string used for the particular auth protocol
+ 1. Negotiate/SPNEGO
 
-	The auth protocol used, will determine the wrapping and unwrapping method plus
-	the protocol string to use. Currently only NTLM is supported
+ 2. Kerberos
 
-	based on the python code from https://pypi.org/project/pywinrm/
+ 3. CredSSP
 
-	see https://github.com/diyan/pywinrm/blob/master/winrm/encryption.py
+    protocol: The protocol string used for the particular auth protocol
 
-	uses the most excellent NTLM library from https://github.com/bodgit/ntlmssp
+    The auth protocol used, will determine the wrapping and unwrapping method plus
+    the protocol string to use. Currently only NTLM is supported
+
+    based on the python code from https://pypi.org/project/pywinrm/
+
+    see https://github.com/diyan/pywinrm/blob/master/winrm/encryption.py
+
+    uses the most excellent NTLM library from https://github.com/bodgit/ntlmssp
 */
 func NewEncryption(protocol string) (*Encryption, error) {
 	encryption := &Encryption{
@@ -68,7 +71,7 @@ func NewEncryption(protocol string) (*Encryption, error) {
 		*/
 	}
 
-	return nil, fmt.Errorf("Encryption for protocol '%s' not supported in winrm", protocol)
+	return nil, fmt.Errorf("Encryption for protocol '%s' not supported", protocol)
 }
 
 func (e *Encryption) Transport(endpoint *Endpoint) error {
@@ -115,6 +118,14 @@ func (e *Encryption) PrepareRequest(client *Client, endpoint string) error {
 	resp, err := e.ntlmhttp.Do(req)
 	if err != nil {
 		return fmt.Errorf("unknown error %w", err)
+	}
+
+	if _, err := io.ReadAll(resp.Body); err != nil {
+		return fmt.Errorf("read response body: %w", err)
+	}
+
+	if err := resp.Body.Close(); err != nil {
+		return fmt.Errorf("close request body: %w", err)
 	}
 
 	if resp.StatusCode != 200 {
@@ -192,7 +203,7 @@ func (e *Encryption) ParseEncryptedResponse(response *http.Response) ([]byte, er
 	if strings.Contains(contentType, fmt.Sprintf(`protocol="%s"`, e.protocolString)) {
 		return e.decryptResponse(response, response.Request.URL.Hostname())
 	}
-	body, err := ioutil.ReadAll(response.Body)
+	body, err := io.ReadAll(response.Body)
 	response.Body.Close()
 	if err != nil {
 		return nil, err
@@ -232,7 +243,7 @@ func deleteEmpty(b [][]byte) [][]byte {
 // on call to textproto.ReadMIMEHeader
 // because of "The first line cannot start with a leading space."
 func (e *Encryption) decryptResponse(response *http.Response, host string) ([]byte, error) {
-	body, _ := ioutil.ReadAll(response.Body)
+	body, _ := io.ReadAll(response.Body)
 	parts := deleteEmpty(bytes.Split(body, []byte(fmt.Sprintf("%s\r\n", mimeBoundary))))
 	var message []byte
 
@@ -278,7 +289,7 @@ func (e *Encryption) decryptMessage(encryptedData []byte, host string) ([]byte, 
 			return e.decryptKerberosMessage(encryptedData, host)
 		*/
 	default:
-		return nil, errors.New("Encryption for protocol " + e.protocol + " not supported in pywinrm")
+		return nil, errors.New("Encryption for protocol " + e.protocol + " not supported")
 	}
 }
 
@@ -337,7 +348,7 @@ func (e *Encryption) buildMessage(encryptedData []byte, host string) ([]byte, er
 			return e.buildKerberosMessage(encryptedData, host)
 		*/
 	default:
-		return nil, errors.New("Encryption for protocol " + e.protocol + " not supported in pywinrm")
+		return nil, errors.New("Encryption for protocol " + e.protocol + " not supported")
 	}
 }
 
