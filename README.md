@@ -5,7 +5,8 @@ _Note_: if you're looking for the `winrm` command-line tool, this has been split
 This is a Go library to execute remote commands on Windows machines through
 the use of WinRM/WinRS.
 
-_Note_: this library doesn't support domain users (it doesn't support GSSAPI nor Kerberos). It's primary target is to execute remote commands on EC2 windows machines.
+The library supports domain users through Kerberos, including WinRM message
+encryption over HTTP.
 
 [![Build Status](https://travis-ci.org/masterzen/winrm.svg?branch=master)](https://travis-ci.org/masterzen/winrm)
 [![Coverage Status](https://coveralls.io/repos/masterzen/winrm/badge.png)](https://coveralls.io/r/masterzen/winrm)
@@ -48,10 +49,13 @@ On the remote host, a PowerShell prompt, using the __Run as Administrator__ opti
 
                 winrm quickconfig
                 y
-                winrm set winrm/config/service '@{AllowUnencrypted="true"}'
                 winrm set winrm/config/winrs '@{MaxMemoryPerShellMB="1024"}'
 
-All __N.B__ points of "Preparing the remote Windows machine for Basic authentication" also applies.
+Kerberos can protect the SOAP message body when `MessageEncryption` is enabled,
+so `AllowUnencrypted=true` is not required. HTTPS remains useful because it also
+protects HTTP headers and provides certificate-based server identity.
+
+All other __N.B__ points of "Preparing the remote Windows machine for Basic authentication" also apply.
 
 
 ### Building the winrm go and executable
@@ -151,45 +155,65 @@ if err != nil {
 
 ```
 
-Passing a TransportDecorator also permit to use Kerberos authentication
+Passing a `TransportDecorator` also permits Kerberos authentication:
 
 ```go
 package main
+
 import (
-  "os"
-  "fmt"
-  "github.com/masterzen/winrm"
+	"context"
+	"os"
+
+	"github.com/masterzen/winrm"
 )
 
-endpoint := winrm.NewEndpoint("srv-win", 5985, false, false, nil, nil, nil, 0)
+func main() {
+	endpoint := winrm.NewEndpoint("srv-win", 5985, false, false, nil, nil, nil, 0)
 
-params := winrm.DefaultParameters
-params.TransportDecorator = func() Transporter {
-        return &winrm.ClientKerberos{
-		Username: "test",
-		Password: "s3cr3t",
-		Hostname: "srv-win",
-		Realm: "DOMAIN.LAN",
-		Port: 5985,
-		Proto: "http",
-		KrbConf: "/etc/krb5.conf",
-		SPN: fmt.Sprintf("HTTP/%s", hostname),
+	params := *winrm.DefaultParameters
+	params.TransportDecorator = func() winrm.Transporter {
+		return &winrm.ClientKerberos{
+			Username:          "test",
+			Password:          "s3cr3t",
+			Hostname:          "srv-win",
+			Realm:             "DOMAIN.LAN",
+			Port:              5985,
+			Proto:             "http",
+			KrbConf:           "/etc/krb5.conf",
+			SPN:               "HTTP/srv-win",
+			MessageEncryption: true,
+		}
+	}
+
+	client, err := winrm.NewClientWithParameters(endpoint, "test", "s3cr3t", &params)
+	if err != nil {
+		panic(err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	_, err = client.RunWithContextWithInput(ctx, "ipconfig", os.Stdout, os.Stderr, os.Stdin)
+	if err != nil {
+		panic(err)
 	}
 }
 
-client, err := NewClientWithParameters(endpoint, "test", "s3cr3t", params)
-if err != nil {
-        panic(err)
-}
-
-ctx, cancel := context.WithCancel(context.Background())
-defer cancel()
-_, err := client.RunWithContextWithInput(ctx, "ipconfig", os.Stdout, os.Stderr, os.Stdin)
-if err != nil {
-        panic(err)
-}
-
 ```
+
+`MessageEncryption` is opt-in to preserve compatibility with existing callers.
+When enabled, the client establishes a mutually authenticated Kerberos context,
+encrypts each SOAP request using the negotiated Kerberos enctype, and requires
+encrypted responses. Password and credential-cache authentication are both
+supported. Set `KrbCCache` instead of `Password` to use a cache.
+
+Kerberos message encryption supports AES128/AES256 SHA-1 and SHA-2 enctypes,
+and legacy RC4-HMAC. AES is strongly preferred. The export-strength RC4
+enctype is not supported.
+
+The SPN should normally be `HTTP/fully-qualified-hostname`; using an IP address
+usually fails because it does not identify the host's registered service
+principal. A `ClientKerberos` serializes requests because GSS message sequence
+numbers are stateful.
 
 
 By passing a Dial in the Parameters struct it is possible to use different dialer (e.g. tunnel through SSH)
