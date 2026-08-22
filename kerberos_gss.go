@@ -213,6 +213,10 @@ func kerberosResponseMechanismToken(token []byte) ([]byte, error) {
 }
 
 func validateKerberosMessageEncryptionEType(keyType int32) error {
+	// RC4-HMAC is retained solely for interoperability with Kerberos peers
+	// that negotiate the legacy RFC 4757 enctype. It is never selected for an
+	// AES session; callers should prefer AES enctypes whenever the KDC offers
+	// them.
 	switch keyType {
 	case etypeID.AES128_CTS_HMAC_SHA1_96,
 		etypeID.AES256_CTS_HMAC_SHA1_96,
@@ -427,9 +431,11 @@ func rotateLeft(data []byte, count int) {
 	copy(data[len(data)-count:], copyData[:count])
 }
 
-// wrapKerberosRC4Message implements the RC4-HMAC GSS_Wrap profile from RFC
-// 4757 section 7.3. Unlike the CFX token, its 45-byte GSS/token header is the
-// WinRM signature buffer and the encrypted application bytes are separate.
+// wrapKerberosRC4Message implements the legacy RC4-HMAC GSS_Wrap profile from
+// RFC 4757 section 7.3. RC4 is intentionally confined to this function and is
+// reached only when the negotiated Kerberos key is etype RC4-HMAC. Unlike the
+// CFX token, its 45-byte GSS/token header is the WinRM signature buffer and
+// the encrypted application bytes are separate.
 func wrapKerberosRC4Message(payload []byte, key types.EncryptionKey, sequence uint64, fromAcceptor bool) ([]byte, error) {
 	if key.KeyType != etypeID.RC4_HMAC || len(key.KeyValue) != 16 {
 		return nil, fmt.Errorf("invalid RC4-HMAC Kerberos key type or length")

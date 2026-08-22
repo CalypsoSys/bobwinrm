@@ -202,6 +202,31 @@ func TestKerberosWrapRejectsTamperingAndBadSequence(t *testing.T) {
 
 func TestKerberosRC4WinRMWrapRoundTrip(t *testing.T) {
 	key := types.EncryptionKey{KeyType: etypeID.RC4_HMAC, KeyValue: []byte("0123456789abcdef")}
+	context := &kerberosInitiatorContext{
+		contextKey:  key,
+		sessionKey:  key,
+		sendSeq:     18,
+		receiveSeq:  19,
+		established: true,
+	}
+	contextMessage, err := context.Wrap([]byte("legacy context request"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The test server response uses the next sequence number and the acceptor
+	// direction, exercising the RC4 branch selected by key type.
+	contextResponse, err := wrapKerberosRC4Message([]byte("legacy context response"), key, 19, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contextPlaintext, err := context.Unwrap(contextResponse)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(contextMessage) == 0 || string(contextPlaintext) != "legacy context response" || context.sendSeq != 19 || context.receiveSeq != 20 {
+		t.Fatalf("context request=%d response=%q send=%d receive=%d", len(contextMessage), contextPlaintext, context.sendSeq, context.receiveSeq)
+	}
+
 	serverMessage, err := wrapKerberosRC4Message([]byte("legacy response"), key, 19, true)
 	if err != nil {
 		t.Fatal(err)
