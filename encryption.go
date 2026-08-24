@@ -19,6 +19,7 @@ import (
 type Encryption struct {
 	ntlm              *ClientNTLM
 	kerberos          *ClientKerberos
+	raw               clientRequest
 	protocol          string
 	protocolString    []byte
 	httpClient        *http.Client
@@ -72,7 +73,15 @@ func (e *Encryption) Transport(endpoint *Endpoint) error {
 	if err := e.ntlm.Transport(endpoint); err != nil {
 		return err
 	}
-	e.httpClient = &http.Client{Transport: e.ntlm.transport}
+	// The Azure NTLM negotiator above is retained for the fallback request
+	// path. bodgit/ntlmssp performs its own handshake for encrypted messages
+	// and requires the underlying transport to remain a *http.Transport.
+	e.raw.dial = e.ntlm.dial
+	e.raw.proxyfunc = e.ntlm.proxyfunc
+	if err := e.raw.Transport(endpoint); err != nil {
+		return err
+	}
+	e.httpClient = &http.Client{Transport: e.raw.transport}
 	return nil
 }
 
