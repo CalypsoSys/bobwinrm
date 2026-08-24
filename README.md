@@ -206,6 +206,12 @@ encrypts each SOAP request using the negotiated Kerberos enctype, and requires
 encrypted responses. Password and credential-cache authentication are both
 supported. Set `KrbCCache` instead of `Password` to use a cache.
 
+The protocol-selected encryption constructors accept `"ntlm"` and
+`"kerberos"`. For Kerberos, `NewEncryptionWithSettings` applies the same
+settings shown above and delegates authentication and message protection to
+`ClientKerberos`. CredSSP is intentionally not accepted until a CredSSP
+authentication transport is available.
+
 Kerberos message encryption supports AES128/AES256 SHA-1 and SHA-2 enctypes,
 and legacy RC4-HMAC. AES is strongly preferred. The export-strength RC4
 enctype is not supported.

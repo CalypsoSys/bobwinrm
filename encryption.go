@@ -13,10 +13,12 @@ import (
 	ntlmhttp "github.com/bodgit/ntlmssp/http"
 )
 
-// Encryption is the NTLM message-encryption transport. The WinRM MIME codec
-// is protocol neutral; Kerberos uses the same codec from ClientKerberos.
+// Encryption is a WinRM message-encryption transport selected by protocol.
+// NTLM uses the legacy transport in this type; Kerberos delegates to
+// ClientKerberos, which owns the Kerberos security context.
 type Encryption struct {
 	ntlm              *ClientNTLM
+	kerberos          *ClientKerberos
 	protocol          string
 	protocolString    []byte
 	httpClient        *http.Client
@@ -25,21 +27,48 @@ type Encryption struct {
 	messageEncryption *winRMMessageEncryption
 }
 
-// NewEncryption creates an NTLM WinRM message-encryption transport.
-// Kerberos message encryption is configured on ClientKerberos because that
-// transport owns the Kerberos realm, SPN, credentials, and security context.
+// NewEncryption creates a WinRM message-encryption transport for protocol.
+// Supported protocols are "ntlm" and "kerberos". For Kerberos, use
+// NewEncryptionWithSettings when possible so the authentication configuration
+// is installed before the transport is initialized.
 func NewEncryption(protocol string) (*Encryption, error) {
-	if protocol != "ntlm" {
-		return nil, fmt.Errorf("encryption for protocol %q not supported by this constructor", protocol)
+	return NewEncryptionWithSettings(protocol, nil)
+}
+
+// NewEncryptionWithSettings creates a protocol-selected WinRM message-
+// encryption transport and applies the supplied authentication settings.
+// CredSSP is intentionally not included until its authentication transport is
+// available.
+func NewEncryptionWithSettings(protocol string, settings *Settings) (*Encryption, error) {
+	switch protocol {
+	case "ntlm":
+		return &Encryption{
+			ntlm:           &ClientNTLM{},
+			protocol:       protocol,
+			protocolString: []byte("application/HTTP-SPNEGO-session-encrypted"),
+		}, nil
+	case "kerberos":
+		kerberos := &ClientKerberos{}
+		if settings != nil {
+			kerberos = NewClientKerberos(settings)
+		}
+		return &Encryption{
+			kerberos:       kerberos,
+			protocol:       protocol,
+			protocolString: []byte("application/HTTP-SPNEGO-session-encrypted"),
+		}, nil
+	default:
+		return nil, fmt.Errorf("encryption for protocol %q not supported", protocol)
 	}
-	return &Encryption{
-		ntlm:           &ClientNTLM{},
-		protocol:       protocol,
-		protocolString: []byte("application/HTTP-SPNEGO-session-encrypted"),
-	}, nil
 }
 
 func (e *Encryption) Transport(endpoint *Endpoint) error {
+	if e.protocol == "kerberos" {
+		if e.kerberos == nil {
+			return fmt.Errorf("Kerberos encryption transport is not configured")
+		}
+		return e.kerberos.Transport(endpoint)
+	}
 	if err := e.ntlm.Transport(endpoint); err != nil {
 		return err
 	}
@@ -48,6 +77,12 @@ func (e *Encryption) Transport(endpoint *Endpoint) error {
 }
 
 func (e *Encryption) Post(client *Client, message *soap.SoapMessage) (string, error) {
+	if e.protocol == "kerberos" {
+		if e.kerberos == nil {
+			return "", fmt.Errorf("Kerberos encryption transport is not configured")
+		}
+		return e.kerberos.Post(client, message)
+	}
 	if e.httpClient == nil {
 		return "", fmt.Errorf("NTLM encryption transport is not initialized")
 	}
