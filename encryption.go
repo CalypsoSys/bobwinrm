@@ -67,7 +67,7 @@ func NewEncryptionWithSettings(protocol string, settings *Settings) (*Encryption
 func (e *Encryption) Transport(endpoint *Endpoint) error {
 	if e.protocol == "kerberos" {
 		if e.kerberos == nil {
-			return fmt.Errorf("Kerberos encryption transport is not configured")
+			return fmt.Errorf("kerberos encryption transport is not configured")
 		}
 		return e.kerberos.Transport(endpoint)
 	}
@@ -89,7 +89,7 @@ func (e *Encryption) Transport(endpoint *Endpoint) error {
 func (e *Encryption) Post(client *Client, message *soap.SoapMessage) (string, error) {
 	if e.protocol == "kerberos" {
 		if e.kerberos == nil {
-			return "", fmt.Errorf("Kerberos encryption transport is not configured")
+			return "", fmt.Errorf("kerberos encryption transport is not configured")
 		}
 		return e.kerberos.Post(client, message)
 	}
@@ -215,7 +215,7 @@ func (p ntlmMessageProtector) Wrap(message []byte) ([]byte, error) {
 		return nil, err
 	}
 	buf := bytes.NewBuffer(make([]byte, 0, 4+len(signature)+len(sealed)))
-	if err := binary.Write(buf, binary.LittleEndian, uint32(len(signature))); err != nil {
+	if err := binary.Write(buf, binary.LittleEndian, uint32(len(signature))); err != nil { //nolint:gosec // WinRM length fields are 32-bit and the buffer is bounded by memory.
 		return nil, err
 	}
 	buf.Write(signature)

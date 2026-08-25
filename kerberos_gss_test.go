@@ -192,7 +192,7 @@ func TestKerberosMessageProtectorWinRMFraming(t *testing.T) {
 	}
 	responseHeaderLength := len(responseToken) - len("response")
 	response := make([]byte, 4+len(responseToken))
-	binary.LittleEndian.PutUint32(response[:4], uint32(responseHeaderLength))
+	binary.LittleEndian.PutUint32(response[:4], uint32(responseHeaderLength)) //nolint:gosec // WinRM length fields are 32-bit and the buffer is bounded by memory.
 	copy(response[4:4+responseHeaderLength], responseToken[:responseHeaderLength])
 	copy(response[4+responseHeaderLength:], responseToken[responseHeaderLength:])
 
@@ -222,7 +222,7 @@ func TestKerberosWrapRejectsTamperingAndBadSequence(t *testing.T) {
 	}
 	headerLength := kerberosWrapHeaderLength + int(rrc) + int(ec)
 	framed := make([]byte, 4+len(valid))
-	binary.LittleEndian.PutUint32(framed[:4], uint32(headerLength))
+	binary.LittleEndian.PutUint32(framed[:4], uint32(headerLength)) //nolint:gosec // WinRM length fields are 32-bit and the buffer is bounded by memory.
 	copy(framed[4:4+headerLength], valid[:headerLength])
 	copy(framed[4+headerLength:], valid[headerLength:])
 	context := &kerberosInitiatorContext{contextKey: key, receiveSeq: 4, established: true}
