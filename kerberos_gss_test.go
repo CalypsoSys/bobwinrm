@@ -116,6 +116,13 @@ func TestKerberosDCEWrapRoundTrip(t *testing.T) {
 			if got := binary.BigEndian.Uint16(token[6:8]); got != rrc || rrc == 0 {
 				t.Fatalf("outer RRC=%d returned RRC=%d", got, rrc)
 			}
+			wantEC := uint16(0)
+			if test.keyType == etypeID.AES128_CTS_HMAC_SHA1_96 || test.keyType == etypeID.AES256_CTS_HMAC_SHA1_96 {
+				wantEC = 16
+			}
+			if got := binary.BigEndian.Uint16(token[4:6]); got != wantEC {
+				t.Fatalf("outer EC=%d, want %d", got, wantEC)
+			}
 			decrypted, gotSequence, err := unsealKerberosWrapToken(token, key, keyusage.GSSAPI_ACCEPTOR_SEAL, true)
 			if err != nil {
 				t.Fatal(err)

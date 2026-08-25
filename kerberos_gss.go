@@ -320,19 +320,21 @@ func sealKerberosWrapToken(payload []byte, key types.EncryptionKey, usage uint32
 	}
 	flags |= kerberosWrapFlagSealed
 	rrc := uint16(etype.GetConfounderByteSize() + etype.GetHMACBitLength()/8)
+	ec := kerberosWrapExtraCount(key.KeyType)
 
-	header := kerberosWrapHeader(flags, 0, 0, sequence)
-	plaintext := make([]byte, 0, len(payload)+len(header))
+	header := kerberosWrapHeader(flags, ec, 0, sequence)
+	plaintext := make([]byte, 0, len(payload)+int(ec)+len(header))
 	plaintext = append(plaintext, payload...)
+	plaintext = append(plaintext, make([]byte, ec)...)
 	plaintext = append(plaintext, header...)
 	_, ciphertext, err := etype.EncryptMessage(key.KeyValue, plaintext, usage)
 	if err != nil {
 		return nil, 0, fmt.Errorf("encrypt Kerberos wrap token: %w", err)
 	}
-	rotateRight(ciphertext, int(rrc))
+	rotateRight(ciphertext, int(rrc)+int(ec))
 
 	token := make([]byte, kerberosWrapHeaderLength+len(ciphertext))
-	copy(token[:kerberosWrapHeaderLength], kerberosWrapHeader(flags, 0, rrc, sequence))
+	copy(token[:kerberosWrapHeaderLength], kerberosWrapHeader(flags, ec, rrc, sequence))
 	copy(token[kerberosWrapHeaderLength:], ciphertext)
 	return token, rrc, nil
 }
@@ -374,7 +376,7 @@ func unsealKerberosWrapToken(token []byte, key types.EncryptionKey, usage uint32
 		return nil, 0, fmt.Errorf("Kerberos wrap token ciphertext is too short: got %d, need at least %d", len(token)-kerberosWrapHeaderLength, minimumCiphertext)
 	}
 	ciphertext := append([]byte(nil), token[kerberosWrapHeaderLength:]...)
-	rotateLeft(ciphertext, int(rrc))
+	rotateLeft(ciphertext, int(rrc)+int(ec))
 	plaintext, err := etype.DecryptMessage(key.KeyValue, ciphertext, usage)
 	if err != nil {
 		return nil, 0, fmt.Errorf("decrypt Kerberos wrap token: %w", err)
@@ -392,6 +394,18 @@ func unsealKerberosWrapToken(token []byte, key types.EncryptionKey, usage uint32
 		return nil, 0, errors.New("Kerberos wrap token has an invalid extra count")
 	}
 	return plaintext[:payloadLength], sequence, nil
+}
+
+// kerberosWrapExtraCount returns the AES-SHA1 filler required by Microsoft's
+// GSS_WrapEx binding. The AES-SHA1 profile requires a non-zero 16-byte EC;
+// other supported profiles retain the RFC 4121 layout used previously.
+func kerberosWrapExtraCount(keyType int32) uint16 {
+	switch keyType {
+	case etypeID.AES128_CTS_HMAC_SHA1_96, etypeID.AES256_CTS_HMAC_SHA1_96:
+		return 16
+	default:
+		return 0
+	}
 }
 
 func kerberosWrapHeader(flags byte, ec, rrc uint16, sequence uint64) []byte {
