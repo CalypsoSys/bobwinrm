@@ -126,6 +126,17 @@ func TestKerberosDCEWrapRoundTrip(t *testing.T) {
 			if got := uint16(binary.BigEndian.Uint16(token[4:6])); got != ec {
 				t.Fatalf("returned EC=%d, outer EC=%d", ec, got)
 			}
+			wantRRC := uint16(16 + 12)
+			switch test.keyType {
+			case etypeID.AES128_CTS_HMAC_SHA256_128:
+				wantRRC = 16 + 16
+			case etypeID.AES256_CTS_HMAC_SHA384_192:
+				wantRRC = 16 + 24
+			}
+			wantRRC += wantEC
+			if rrc != wantRRC {
+				t.Fatalf("RRC=%d, want %d", rrc, wantRRC)
+			}
 			decrypted, gotSequence, err := unsealKerberosWrapToken(token, key, keyusage.GSSAPI_ACCEPTOR_SEAL, true)
 			if err != nil {
 				t.Fatal(err)
@@ -156,8 +167,8 @@ func TestKerberosMessageProtectorWinRMFraming(t *testing.T) {
 	if headerLength <= kerberosWrapHeaderLength || headerLength >= len(outgoing)-4 {
 		t.Fatalf("unexpected WinRM signature length %d for %d-byte message", headerLength, len(outgoing))
 	}
-	if headerLength != kerberosWrapHeaderLength+28+16 {
-		t.Fatalf("unexpected AES-SHA1 signature length %d, want 60", headerLength)
+	if headerLength != kerberosWrapHeaderLength+44 {
+		t.Fatalf("unexpected AES-SHA1 signature length %d, want 60 (RRC=44)", headerLength)
 	}
 	reconstructed := append(append([]byte(nil), outgoing[4:4+headerLength]...), outgoing[4+headerLength:]...)
 	request, sequence, err := unsealKerberosWrapToken(reconstructed, key, keyusage.GSSAPI_INITIATOR_SEAL, false)
@@ -168,11 +179,11 @@ func TestKerberosMessageProtectorWinRMFraming(t *testing.T) {
 		t.Fatalf("request=%q sequence=%d next=%d", request, sequence, context.sendSeq)
 	}
 
-	responseToken, responseRRC, responseEC, err := sealKerberosWrapToken([]byte("response"), key, keyusage.GSSAPI_ACCEPTOR_SEAL, kerberosWrapFlagSentByAcceptor|kerberosWrapFlagAcceptorSubkey, 11)
+	responseToken, responseRRC, _, err := sealKerberosWrapToken([]byte("response"), key, keyusage.GSSAPI_ACCEPTOR_SEAL, kerberosWrapFlagSentByAcceptor|kerberosWrapFlagAcceptorSubkey, 11)
 	if err != nil {
 		t.Fatal(err)
 	}
-	responseHeaderLength := kerberosWrapHeaderLength + int(responseRRC) + int(responseEC)
+	responseHeaderLength := kerberosWrapHeaderLength + int(responseRRC)
 	response := make([]byte, 4+len(responseToken))
 	binary.LittleEndian.PutUint32(response[:4], uint32(responseHeaderLength))
 	copy(response[4:4+responseHeaderLength], responseToken[:responseHeaderLength])

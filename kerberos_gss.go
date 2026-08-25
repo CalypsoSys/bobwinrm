@@ -251,11 +251,13 @@ func (c *kerberosInitiatorContext) Wrap(message []byte) ([]byte, error) {
 	if c.useSubkey {
 		flags |= kerberosWrapFlagAcceptorSubkey
 	}
-	token, rrc, ec, err := sealKerberosWrapToken(message, c.contextKey, keyusage.GSSAPI_INITIATOR_SEAL, flags, c.sendSeq)
+	token, rrc, _, err := sealKerberosWrapToken(message, c.contextKey, keyusage.GSSAPI_INITIATOR_SEAL, flags, c.sendSeq)
 	if err != nil {
 		return nil, err
 	}
-	signatureLength := kerberosWrapHeaderLength + int(rrc) + int(ec)
+	// MS-WSMV places the GSS header and the complete rotated region in the
+	// signature part. For AES-SHA1/MS-KILE, RRC includes the EC filler.
+	signatureLength := kerberosWrapHeaderLength + int(rrc)
 	if signatureLength > len(token) {
 		return nil, fmt.Errorf("Kerberos wrap token signature length %d exceeds token length %d", signatureLength, len(token))
 	}
@@ -319,8 +321,11 @@ func sealKerberosWrapToken(payload []byte, key types.EncryptionKey, usage uint32
 		return nil, 0, 0, fmt.Errorf("get Kerberos encryption type: %w", err)
 	}
 	flags |= kerberosWrapFlagSealed
-	rrc := uint16(etype.GetConfounderByteSize() + etype.GetHMACBitLength()/8)
 	ec := kerberosWrapExtraCount(key.KeyType)
+	// RRC is the complete rotated ciphertext region. In the AES-SHA1/MS-KILE
+	// profile this includes the 16-byte EC filler in addition to the
+	// confounder and checksum.
+	rrc := uint16(etype.GetConfounderByteSize() + etype.GetHMACBitLength()/8 + int(ec))
 
 	header := kerberosWrapHeader(flags, ec, 0, sequence)
 	plaintext := make([]byte, 0, len(payload)+int(ec)+len(header))
@@ -331,7 +336,7 @@ func sealKerberosWrapToken(payload []byte, key types.EncryptionKey, usage uint32
 	if err != nil {
 		return nil, 0, 0, fmt.Errorf("encrypt Kerberos wrap token: %w", err)
 	}
-	rotateRight(ciphertext, int(rrc)+int(ec))
+	rotateRight(ciphertext, int(rrc))
 
 	token := make([]byte, kerberosWrapHeaderLength+len(ciphertext))
 	copy(token[:kerberosWrapHeaderLength], kerberosWrapHeader(flags, ec, rrc, sequence))
@@ -376,7 +381,7 @@ func unsealKerberosWrapToken(token []byte, key types.EncryptionKey, usage uint32
 		return nil, 0, fmt.Errorf("Kerberos wrap token ciphertext is too short: got %d, need at least %d", len(token)-kerberosWrapHeaderLength, minimumCiphertext)
 	}
 	ciphertext := append([]byte(nil), token[kerberosWrapHeaderLength:]...)
-	rotateLeft(ciphertext, int(rrc)+int(ec))
+	rotateLeft(ciphertext, int(rrc))
 	plaintext, err := etype.DecryptMessage(key.KeyValue, ciphertext, usage)
 	if err != nil {
 		return nil, 0, fmt.Errorf("decrypt Kerberos wrap token: %w", err)
