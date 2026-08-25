@@ -5,7 +5,7 @@ import (
 	"crypto/hmac"
 	"crypto/md5" // #nosec G501 -- mandated by the Kerberos RC4-HMAC profile (RFC 4757).
 	"crypto/rand"
-	"crypto/rc4" // #nosec G505 -- required for interoperability with legacy Kerberos RC4-HMAC.
+	"crypto/rc4" //nolint:gosec // required for interoperability with legacy Kerberos RC4-HMAC.
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -110,7 +110,7 @@ func newKerberosInitiatorContext(kerberosClient *client.Client, spn string) (*ke
 		contextKey: sessionKey,
 		clientTime: authenticator.CTime,
 		clientUsec: authenticator.Cusec,
-		sendSeq:    uint64(authenticator.SeqNumber),
+		sendSeq:    uint64(authenticator.SeqNumber), //nolint:gosec // Kerberos sequence numbers are non-negative protocol values.
 	}
 	return context, negotiationToken, nil
 }
@@ -119,7 +119,7 @@ func kerberosAuthenticatorChecksum(contextFlags int) []byte {
 	checksum := make([]byte, 24)
 	// RFC 4121 section 4.1.1: the channel-binding field is always 16 bytes.
 	binary.LittleEndian.PutUint32(checksum[:4], 16)
-	binary.LittleEndian.PutUint32(checksum[20:24], uint32(contextFlags))
+	binary.LittleEndian.PutUint32(checksum[20:24], uint32(contextFlags)) //nolint:gosec // context flags fit the 32-bit GSS field.
 	return checksum
 }
 
@@ -188,7 +188,7 @@ func (c *kerberosInitiatorContext) accept(token []byte) error {
 		c.contextKey = reply.Subkey
 		c.useSubkey = true
 	}
-	c.receiveSeq = uint64(reply.SequenceNumber)
+	c.receiveSeq = uint64(reply.SequenceNumber) //nolint:gosec // Kerberos sequence numbers are non-negative protocol values.
 	c.established = true
 	return nil
 }
@@ -264,7 +264,7 @@ func (c *kerberosInitiatorContext) Wrap(message []byte) ([]byte, error) {
 	}
 
 	result := make([]byte, 4+len(token))
-	binary.LittleEndian.PutUint32(result[:4], uint32(signatureLength))
+	binary.LittleEndian.PutUint32(result[:4], uint32(signatureLength)) //nolint:gosec // WinRM length fields are 32-bit and the buffer is bounded by memory.
 	copy(result[4:4+signatureLength], token[:signatureLength])
 	copy(result[4+signatureLength:], token[signatureLength:])
 	c.sendSeq++
@@ -329,7 +329,7 @@ func sealKerberosWrapToken(payload []byte, key types.EncryptionKey, usage uint32
 	// description and MS-KILE's generic EC guidance are misleading for this
 	// WinRM format; do not simplify this back to an EC=16 token.
 	ec := uint16(0)
-	rrc := uint16(etype.GetConfounderByteSize() + etype.GetHMACBitLength()/8)
+	rrc := uint16(etype.GetConfounderByteSize() + etype.GetHMACBitLength()/8) //nolint:gosec // supported Kerberos etypes have a small fixed RRC.
 
 	header := kerberosWrapHeader(flags, ec, 0, sequence)
 	plaintext := make([]byte, 0, len(payload)+len(header))
@@ -384,7 +384,7 @@ func unsealKerberosWrapToken(token []byte, key types.EncryptionKey, usage uint32
 	if err != nil {
 		return nil, 0, fmt.Errorf("get Kerberos encryption type: %w", err)
 	}
-	wantRRC := uint16(etype.GetConfounderByteSize() + etype.GetHMACBitLength()/8)
+	wantRRC := uint16(etype.GetConfounderByteSize() + etype.GetHMACBitLength()/8) //nolint:gosec // supported Kerberos etypes have a small fixed RRC.
 	if rrc != wantRRC {
 		return nil, 0, fmt.Errorf("unexpected Kerberos DCE RRC %d, want %d", rrc, wantRRC)
 	}

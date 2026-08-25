@@ -1,6 +1,7 @@
 package winrm
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"io"
@@ -88,7 +89,7 @@ func (c clientRequest) Post(client *Client, request *soap.SoapMessage) (string, 
 	httpClient := &http.Client{Transport: c.transport}
 
 	//nolint:noctx
-	req, err := http.NewRequest("POST", client.url, strings.NewReader(request.String()))
+	req, err := http.NewRequestWithContext(context.Background(), "POST", client.url, strings.NewReader(request.String()))
 	if err != nil {
 		return "", fmt.Errorf("impossible to create http request %w", err)
 	}

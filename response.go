@@ -31,8 +31,8 @@ func (e *ExecuteCommandError) Is(err error) bool {
 	return ok
 }
 
-func (b *ExecuteCommandError) Unwrap() error {
-	return b.Inner
+func (e *ExecuteCommandError) Unwrap() error {
+	return e.Inner
 }
 
 func first(node tree.Node, xpath string) (string, error) {
