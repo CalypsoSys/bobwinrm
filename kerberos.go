@@ -203,21 +203,21 @@ func (c *ClientKerberos) readEncryptedResponse(resp *http.Response) (string, err
 		return "", errors.New("kerberos response is nil")
 	}
 	if resp.Body == nil {
-		return "", errors.New("Kerberos response body is nil")
+		return "", errors.New("kerberos response body is nil")
 	}
 	if resp.StatusCode != http.StatusOK {
 		responseBody, readErr := io.ReadAll(resp.Body)
 		if readErr != nil {
-			return "", fmt.Errorf("Kerberos request returned HTTP %d; read response: %w", resp.StatusCode, readErr)
+			return "", fmt.Errorf("kerberos request returned HTTP %d; read response: %w", resp.StatusCode, readErr)
 		}
-		return "", fmt.Errorf("Kerberos request returned HTTP %d: %s", resp.StatusCode, responseBody)
+		return "", fmt.Errorf("kerberos request returned HTTP %d: %s", resp.StatusCode, responseBody)
 	}
 	if !strings.Contains(resp.Header.Get("Content-Type"), fmt.Sprintf(`protocol="%s"`, c.messageEncryption.protocolString)) {
 		responseBody, readErr := io.ReadAll(resp.Body)
 		if readErr != nil {
 			return "", readErr
 		}
-		return "", fmt.Errorf("Kerberos message encryption was required but the response was not encrypted: content type %q, body %q", resp.Header.Get("Content-Type"), responseBody)
+		return "", fmt.Errorf("kerberos message encryption was required but the response was not encrypted: content type %q, body %q", resp.Header.Get("Content-Type"), responseBody)
 	}
 	decrypted, err := c.messageEncryption.decryptResponse(resp)
 	if err != nil {
@@ -250,7 +250,7 @@ func (c *ClientKerberos) ensureSecurityContext(endpoint string, kerberosClient *
 		return fmt.Errorf("send Kerberos negotiation request: %w", err)
 	}
 	if resp.Body == nil {
-		return errors.New("Kerberos negotiation response body is nil")
+		return errors.New("kerberos negotiation response body is nil")
 	}
 	defer resp.Body.Close()
 	responseToken, tokenErr := negotiateResponseToken(resp.Header.Values("WWW-Authenticate"))
@@ -259,7 +259,7 @@ func (c *ClientKerberos) ensureSecurityContext(endpoint string, kerberosClient *
 		return fmt.Errorf("read Kerberos negotiation response: %w", bodyErr)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("Kerberos negotiation returned HTTP %d", resp.StatusCode)
+		return fmt.Errorf("kerberos negotiation returned HTTP %d", resp.StatusCode)
 	}
 	if tokenErr != nil {
 		return tokenErr
@@ -290,22 +290,22 @@ func negotiateResponseToken(headers []string) ([]byte, error) {
 			return token, nil
 		}
 	}
-	return nil, errors.New("Kerberos negotiation response did not include a Negotiate or Kerberos token")
+	return nil, errors.New("kerberos negotiation response did not include a Negotiate or Kerberos token")
 }
 
 func readKerberosSOAPResponse(resp *http.Response) (string, error) {
 	if resp == nil {
-		return "", errors.New("Kerberos response is nil")
+		return "", errors.New("kerberos response is nil")
 	}
 	if resp.Body == nil {
-		return "", errors.New("Kerberos response body is nil")
+		return "", errors.New("kerberos response body is nil")
 	}
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("Kerberos request returned HTTP %d: %s", resp.StatusCode, responseBody)
+		return "", fmt.Errorf("kerberos request returned HTTP %d: %s", resp.StatusCode, responseBody)
 	}
 	if !strings.Contains(resp.Header.Get("Content-Type"), "application/soap+xml") {
 		return "", fmt.Errorf("invalid Kerberos response content type %q", resp.Header.Get("Content-Type"))
