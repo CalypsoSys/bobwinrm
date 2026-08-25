@@ -201,30 +201,6 @@ func (e *Encryption) ParseEncryptedResponse(response *http.Response) ([]byte, er
 	return io.ReadAll(response.Body)
 }
 
-// Compatibility helpers retained for tests and callers in this package.
-func (e *Encryption) decryptResponse(response *http.Response, _ string) ([]byte, error) {
-	if e.messageEncryption == nil {
-		return nil, fmt.Errorf("NTLM message encryption is not initialized")
-	}
-	return e.messageEncryption.decryptResponse(response)
-}
-
-func (e *Encryption) decryptMessage(encryptedData []byte, _ string) ([]byte, error) {
-	return e.decryptNtlmMessage(encryptedData, "")
-}
-
-func (e *Encryption) decryptNtlmMessage(encryptedData []byte, _ string) ([]byte, error) {
-	return (ntlmMessageProtector{client: e.ntlmClient}).Unwrap(encryptedData)
-}
-
-func (e *Encryption) buildMessage(message []byte, _ string) ([]byte, error) {
-	return e.buildNTLMMessage(message, "")
-}
-
-func (e *Encryption) buildNTLMMessage(message []byte, _ string) ([]byte, error) {
-	return (ntlmMessageProtector{client: e.ntlmClient}).Wrap(message)
-}
-
 type ntlmMessageProtector struct {
 	client *ntlmssp.Client
 }
