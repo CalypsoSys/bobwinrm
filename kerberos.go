@@ -11,7 +11,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/CalypsoSys/bobwinrm/soap"
+	"github.com/masterzen/winrm/soap"
 
 	"github.com/jcmturner/gokrb5/v8/client"
 	"github.com/jcmturner/gokrb5/v8/config"

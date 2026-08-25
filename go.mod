@@ -1,4 +1,4 @@
-module github.com/CalypsoSys/bobwinrm
+module github.com/masterzen/winrm
 
 go 1.21
 
