@@ -97,7 +97,7 @@ func (c *ClientKerberos) Post(clt *Client, request *soap.SoapMessage) (string, e
 	defer c.requestMu.Unlock()
 
 	if c.httpClient == nil {
-		return "", errors.New("Kerberos transport is not initialized")
+		return "", errors.New("kerberos transport is not initialized")
 	}
 	kerberosClient, err := c.getKerberosClient()
 	if err != nil {
@@ -195,12 +195,12 @@ func (c *ClientKerberos) postEncrypted(endpoint string, body []byte, kerberosCli
 		// and replay this request once with a newly wrapped body.
 		c.resetSecurityContext()
 	}
-	return "", errors.New("Kerberos encrypted request retry exhausted")
+	return "", errors.New("kerberos encrypted request retry exhausted")
 }
 
 func (c *ClientKerberos) readEncryptedResponse(resp *http.Response) (string, error) {
 	if resp == nil {
-		return "", errors.New("Kerberos response is nil")
+		return "", errors.New("kerberos response is nil")
 	}
 	if resp.Body == nil {
 		return "", errors.New("Kerberos response body is nil")
