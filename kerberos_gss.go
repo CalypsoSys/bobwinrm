@@ -513,7 +513,7 @@ func wrapKerberosRC4Message(payload []byte, key types.EncryptionKey, sequence ui
 
 	signature := append(append([]byte(nil), kerberosRC4GSSHeader...), token...)
 	result := make([]byte, 4+len(signature)+len(encryptedPayload))
-	binary.LittleEndian.PutUint32(result[:4], uint32(len(signature))) //nolint:gosec // WinRM length fields are 32-bit and the buffer is bounded by memory.
+	binary.LittleEndian.PutUint32(result[:4], uint32(len(signature)))
 	copy(result[4:4+len(signature)], signature)
 	copy(result[4+len(signature):], encryptedPayload)
 	return result, nil
@@ -585,7 +585,7 @@ func unwrapKerberosRC4Message(message []byte, key types.EncryptionKey, expectFro
 	if len(padded) == 0 || padded[len(padded)-1] != 0x01 {
 		return nil, 0, errors.New("invalid RC4-HMAC wrap-token padding")
 	}
-	return padded[:len(padded)-1], uint64(sequence), nil //nolint:gosec // sequence is parsed from the 32-bit RC4 token field.
+	return padded[:len(padded)-1], uint64(sequence), nil
 }
 
 func hmacMD5(key, data []byte) []byte {
