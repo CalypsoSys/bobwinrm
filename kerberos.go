@@ -2,6 +2,7 @@ package winrm
 
 import (
 	"bytes"
+	stdcontext "context"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -144,7 +145,7 @@ func (c *ClientKerberos) getKerberosClient() (*client.Client, error) {
 }
 
 func (c *ClientKerberos) postAuthenticated(endpoint string, body []byte, kerberosClient *client.Client) (string, error) {
-	req, err := http.NewRequest("POST", endpoint, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(stdcontext.Background(), "POST", endpoint, bytes.NewReader(body))
 	if err != nil {
 		return "", fmt.Errorf("create Kerberos request: %w", err)
 	}
@@ -169,7 +170,7 @@ func (c *ClientKerberos) postEncrypted(endpoint string, body []byte, kerberosCli
 		if err != nil {
 			return "", err
 		}
-		req, err := http.NewRequest("POST", endpoint, bytes.NewReader(encryptedBody))
+		req, err := http.NewRequestWithContext(stdcontext.Background(), "POST", endpoint, bytes.NewReader(encryptedBody))
 		if err != nil {
 			return "", fmt.Errorf("create encrypted Kerberos request: %w", err)
 		}
@@ -238,7 +239,7 @@ func (c *ClientKerberos) ensureSecurityContext(endpoint string, kerberosClient *
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequest("POST", endpoint, nil)
+	req, err := http.NewRequestWithContext(stdcontext.Background(), "POST", endpoint, nil)
 	if err != nil {
 		return fmt.Errorf("create Kerberos negotiation request: %w", err)
 	}

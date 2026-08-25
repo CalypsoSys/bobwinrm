@@ -2,6 +2,7 @@ package winrm
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -138,7 +139,7 @@ func (e *Encryption) PrepareRequest(_ *Client, endpoint string) error {
 	if e.ntlmhttp == nil {
 		return fmt.Errorf("NTLM HTTP client is not initialized")
 	}
-	req, err := http.NewRequest("POST", endpoint, nil)
+	req, err := http.NewRequestWithContext(context.Background(), "POST", endpoint, nil)
 	if err != nil {
 		return err
 	}
@@ -166,7 +167,7 @@ func (e *Encryption) PrepareEncryptedRequest(_ *Client, endpoint string, message
 	if err != nil {
 		return "", err
 	}
-	req, err := http.NewRequest("POST", endpoint, bytes.NewReader(encryptedMessage))
+	req, err := http.NewRequestWithContext(context.Background(), "POST", endpoint, bytes.NewReader(encryptedMessage))
 	if err != nil {
 		return "", err
 	}

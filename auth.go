@@ -1,6 +1,7 @@
 package winrm
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"io"
@@ -86,7 +87,7 @@ func parse(response *http.Response) (string, error) {
 func (c ClientAuthRequest) Post(client *Client, request *soap.SoapMessage) (string, error) {
 	httpClient := &http.Client{Transport: c.transport}
 
-	req, err := http.NewRequest("POST", client.url, strings.NewReader(request.String()))
+	req, err := http.NewRequestWithContext(context.Background(), "POST", client.url, strings.NewReader(request.String()))
 	if err != nil {
 		return "", fmt.Errorf("impossible to create http request %w", err)
 	}
