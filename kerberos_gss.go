@@ -63,13 +63,13 @@ type kerberosInitiatorContext struct {
 
 func newKerberosInitiatorContext(kerberosClient *client.Client, spn string) (*kerberosInitiatorContext, []byte, error) {
 	if kerberosClient == nil {
-		return nil, nil, errors.New("Kerberos client is nil")
+		return nil, nil, errors.New("kerberos client is nil")
 	}
 	if spn == "" {
-		return nil, nil, errors.New("Kerberos SPN is empty")
+		return nil, nil, errors.New("kerberos SPN is empty")
 	}
 	if err := kerberosClient.AffirmLogin(); err != nil {
-		return nil, nil, fmt.Errorf("Kerberos login: %w", err)
+		return nil, nil, fmt.Errorf("kerberos login: %w", err)
 	}
 	ticket, sessionKey, err := kerberosClient.GetServiceTicket(spn)
 	if err != nil {
@@ -156,7 +156,7 @@ func (c *kerberosInitiatorContext) accept(token []byte) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.established {
-		return errors.New("Kerberos security context is already established")
+		return errors.New("kerberos security context is already established")
 	}
 	mechanismToken, err := kerberosResponseMechanismToken(token)
 	if err != nil {
@@ -167,7 +167,7 @@ func (c *kerberosInitiatorContext) accept(token []byte) error {
 		return fmt.Errorf("parse Kerberos AP-REP token: %w", err)
 	}
 	if !krbToken.IsAPRep() {
-		return errors.New("Kerberos mutual-authentication response does not contain AP-REP")
+		return errors.New("kerberos mutual-authentication response does not contain AP-REP")
 	}
 
 	decrypted, err := crypto.DecryptEncPart(krbToken.APRep.EncPart, c.sessionKey, keyusage.AP_REP_ENCPART)
@@ -179,11 +179,11 @@ func (c *kerberosInitiatorContext) accept(token []byte) error {
 		return fmt.Errorf("parse Kerberos AP-REP encrypted part: %w", err)
 	}
 	if reply.CTime.Unix() != c.clientTime.Unix() || reply.Cusec != c.clientUsec {
-		return errors.New("Kerberos mutual authentication failed: AP-REP timestamp does not match AP-REQ")
+		return errors.New("kerberos mutual authentication failed: AP-REP timestamp does not match AP-REQ")
 	}
 	if reply.Subkey.KeyType != 0 {
 		if err := validateKerberosMessageEncryptionEType(reply.Subkey.KeyType); err != nil {
-			return fmt.Errorf("Kerberos acceptor subkey: %w", err)
+			return fmt.Errorf("kerberos acceptor subkey: %w", err)
 		}
 		c.contextKey = reply.Subkey
 		c.useSubkey = true
@@ -195,7 +195,7 @@ func (c *kerberosInitiatorContext) accept(token []byte) error {
 
 func kerberosResponseMechanismToken(token []byte) ([]byte, error) {
 	if len(token) == 0 {
-		return nil, errors.New("Kerberos mutual-authentication response token is empty")
+		return nil, errors.New("kerberos mutual-authentication response token is empty")
 	}
 	// SPNEGO NegTokenResp is context-specific tag 1 (0xa1). A server can also
 	// return the raw Kerberos GSS mechanism token.
@@ -227,7 +227,7 @@ func validateKerberosMessageEncryptionEType(keyType int32) error {
 	case etypeID.RC4_HMAC_EXP:
 		return fmt.Errorf("export-strength Kerberos RC4 enctype %d is not supported for WinRM message encryption", keyType)
 	default:
-		return fmt.Errorf("Kerberos enctype %d is not supported for WinRM message encryption", keyType)
+		return fmt.Errorf("kerberos enctype %d is not supported for WinRM message encryption", keyType)
 	}
 }
 
@@ -235,7 +235,7 @@ func (c *kerberosInitiatorContext) Wrap(message []byte) ([]byte, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if !c.established {
-		return nil, errors.New("Kerberos security context is not established")
+		return nil, errors.New("kerberos security context is not established")
 	}
 
 	if c.contextKey.KeyType == etypeID.RC4_HMAC {
@@ -283,14 +283,14 @@ func (c *kerberosInitiatorContext) Unwrap(message []byte) ([]byte, error) {
 			return nil, err
 		}
 		if sequence != c.receiveSeq {
-			return nil, fmt.Errorf("Kerberos response sequence mismatch: expected %d, got %d", c.receiveSeq, sequence)
+			return nil, fmt.Errorf("kerberos response sequence mismatch: expected %d, got %d", c.receiveSeq, sequence)
 		}
 		c.receiveSeq++
 		return plaintext, nil
 	}
 
 	if len(message) < 4 {
-		return nil, errors.New("Kerberos encrypted payload is shorter than its length prefix")
+		return nil, errors.New("kerberos encrypted payload is shorter than its length prefix")
 	}
 	signatureLength := int(binary.LittleEndian.Uint32(message[:4]))
 	if signatureLength < kerberosWrapHeaderLength || signatureLength > len(message)-4 {
@@ -305,7 +305,7 @@ func (c *kerberosInitiatorContext) Unwrap(message []byte) ([]byte, error) {
 		return nil, err
 	}
 	if sequence != c.receiveSeq {
-		return nil, fmt.Errorf("Kerberos response sequence mismatch: expected %d, got %d", c.receiveSeq, sequence)
+		return nil, fmt.Errorf("kerberos response sequence mismatch: expected %d, got %d", c.receiveSeq, sequence)
 	}
 	c.receiveSeq++
 	return plaintext, nil
@@ -313,7 +313,7 @@ func (c *kerberosInitiatorContext) Unwrap(message []byte) ([]byte, error) {
 
 func sealKerberosWrapToken(payload []byte, key types.EncryptionKey, usage uint32, flags byte, sequence uint64) ([]byte, uint16, uint16, error) {
 	if key.KeyType == etypeID.RC4_HMAC {
-		return nil, 0, 0, errors.New("RC4-HMAC uses RFC 1964 wrap tokens, not RFC 4121 CFX tokens")
+		return nil, 0, 0, errors.New("rc4-HMAC uses RFC 1964 wrap tokens, not RFC 4121 CFX tokens")
 	}
 	if err := validateKerberosMessageEncryptionEType(key.KeyType); err != nil {
 		return nil, 0, 0, err
@@ -354,13 +354,13 @@ func sealKerberosWrapToken(payload []byte, key types.EncryptionKey, usage uint32
 
 func unsealKerberosWrapToken(token []byte, key types.EncryptionKey, usage uint32, expectFromAcceptor bool) ([]byte, uint64, error) {
 	if key.KeyType == etypeID.RC4_HMAC {
-		return nil, 0, errors.New("RC4-HMAC uses RFC 1964 wrap tokens, not RFC 4121 CFX tokens")
+		return nil, 0, errors.New("rc4-HMAC uses RFC 1964 wrap tokens, not RFC 4121 CFX tokens")
 	}
 	if err := validateKerberosMessageEncryptionEType(key.KeyType); err != nil {
 		return nil, 0, err
 	}
 	if len(token) < kerberosWrapHeaderLength {
-		return nil, 0, errors.New("Kerberos wrap token is shorter than its header")
+		return nil, 0, errors.New("kerberos wrap token is shorter than its header")
 	}
 	if !bytes.Equal(token[:2], kerberosWrapTokenID) {
 		return nil, 0, fmt.Errorf("invalid Kerberos wrap token ID %x", token[:2])
@@ -370,11 +370,11 @@ func unsealKerberosWrapToken(token []byte, key types.EncryptionKey, usage uint32
 		return nil, 0, fmt.Errorf("invalid Kerberos wrap token filler 0x%02x", token[3])
 	}
 	if flags&kerberosWrapFlagSealed == 0 {
-		return nil, 0, errors.New("Kerberos wrap token is not sealed")
+		return nil, 0, errors.New("kerberos wrap token is not sealed")
 	}
 	fromAcceptor := flags&kerberosWrapFlagSentByAcceptor != 0
 	if fromAcceptor != expectFromAcceptor {
-		return nil, 0, fmt.Errorf("Kerberos wrap token direction mismatch: from acceptor is %t", fromAcceptor)
+		return nil, 0, fmt.Errorf("kerberos wrap token direction mismatch: from acceptor is %t", fromAcceptor)
 	}
 	ec := binary.BigEndian.Uint16(token[4:6])
 	rrc := binary.BigEndian.Uint16(token[6:8])
@@ -390,7 +390,7 @@ func unsealKerberosWrapToken(token []byte, key types.EncryptionKey, usage uint32
 	}
 	minimumCiphertext := etype.GetConfounderByteSize() + etype.GetHMACBitLength()/8 + kerberosWrapHeaderLength + int(ec)
 	if len(token)-kerberosWrapHeaderLength < minimumCiphertext {
-		return nil, 0, fmt.Errorf("Kerberos wrap token ciphertext is too short: got %d, need at least %d", len(token)-kerberosWrapHeaderLength, minimumCiphertext)
+		return nil, 0, fmt.Errorf("kerberos wrap token ciphertext is too short: got %d, need at least %d", len(token)-kerberosWrapHeaderLength, minimumCiphertext)
 	}
 	ciphertext := append([]byte(nil), token[kerberosWrapHeaderLength:]...)
 	rotateLeft(ciphertext, int(rrc))
@@ -404,11 +404,11 @@ func unsealKerberosWrapToken(token []byte, key types.EncryptionKey, usage uint32
 	headerOffset := len(plaintext) - kerberosWrapHeaderLength
 	expectedHeader := kerberosWrapHeader(flags, ec, 0, sequence)
 	if !bytes.Equal(plaintext[headerOffset:], expectedHeader) {
-		return nil, 0, errors.New("Kerberos wrap token encrypted header does not match its outer header")
+		return nil, 0, errors.New("kerberos wrap token encrypted header does not match its outer header")
 	}
 	payloadLength := headerOffset - int(ec)
 	if payloadLength < 0 {
-		return nil, 0, errors.New("Kerberos wrap token has an invalid extra count")
+		return nil, 0, errors.New("kerberos wrap token has an invalid extra count")
 	}
 	return plaintext[:payloadLength], sequence, nil
 }
@@ -460,7 +460,7 @@ func wrapKerberosRC4Message(payload []byte, key types.EncryptionKey, sequence ui
 		return nil, fmt.Errorf("invalid RC4-HMAC Kerberos key type or length")
 	}
 	if sequence > uint64(^uint32(0)) {
-		return nil, fmt.Errorf("RC4-HMAC sequence number %d exceeds 32 bits", sequence)
+		return nil, fmt.Errorf("rc4-HMAC sequence number %d exceeds 32 bits", sequence)
 	}
 
 	// RFC 4757 section 7.3 rounds RC4-HMAC padding to one byte. The byte is
@@ -470,7 +470,7 @@ func wrapKerberosRC4Message(payload []byte, key types.EncryptionKey, sequence ui
 	token := make([]byte, 32)
 	copy(token[:8], []byte{0x02, 0x01, 0x11, 0x00, 0x10, 0x00, 0xff, 0xff})
 	sequencePlain := make([]byte, 8)
-	binary.BigEndian.PutUint32(sequencePlain[:4], uint32(sequence))
+	binary.BigEndian.PutUint32(sequencePlain[:4], uint32(sequence)) //nolint:gosec // sequence was checked to fit the 32-bit RC4 field.
 	if fromAcceptor {
 		copy(sequencePlain[4:], []byte{0xff, 0xff, 0xff, 0xff})
 	}
@@ -513,7 +513,7 @@ func wrapKerberosRC4Message(payload []byte, key types.EncryptionKey, sequence ui
 
 	signature := append(append([]byte(nil), kerberosRC4GSSHeader...), token...)
 	result := make([]byte, 4+len(signature)+len(encryptedPayload))
-	binary.LittleEndian.PutUint32(result[:4], uint32(len(signature)))
+	binary.LittleEndian.PutUint32(result[:4], uint32(len(signature))) //nolint:gosec // WinRM length fields are 32-bit and the buffer is bounded by memory.
 	copy(result[4:4+len(signature)], signature)
 	copy(result[4+len(signature):], encryptedPayload)
 	return result, nil
@@ -524,7 +524,7 @@ func unwrapKerberosRC4Message(message []byte, key types.EncryptionKey, expectFro
 		return nil, 0, fmt.Errorf("invalid RC4-HMAC Kerberos key type or length")
 	}
 	if len(message) < 4 {
-		return nil, 0, errors.New("RC4-HMAC payload is shorter than its length prefix")
+		return nil, 0, errors.New("rc4-HMAC payload is shorter than its length prefix")
 	}
 	signatureLength := int(binary.LittleEndian.Uint32(message[:4]))
 	if signatureLength != len(kerberosRC4GSSHeader)+32 || signatureLength > len(message)-4 {
@@ -550,7 +550,7 @@ func unwrapKerberosRC4Message(message []byte, key types.EncryptionKey, expectFro
 	}
 	for _, direction := range sequencePlain[4:] {
 		if direction != expectedDirection {
-			return nil, 0, errors.New("RC4-HMAC wrap-token direction mismatch")
+			return nil, 0, errors.New("rc4-HMAC wrap-token direction mismatch")
 		}
 	}
 	sequence := binary.BigEndian.Uint32(sequencePlain[:4])
@@ -579,13 +579,13 @@ func unwrapKerberosRC4Message(message []byte, key types.EncryptionKey, expectFro
 	digest := md5.Sum(checksumInput) // #nosec G401 -- mandated by RFC 4757.
 	expectedChecksum := hmacMD5(signingKey, digest[:])[:8]
 	if !hmac.Equal(checksum, expectedChecksum) {
-		return nil, 0, errors.New("RC4-HMAC wrap-token checksum mismatch")
+		return nil, 0, errors.New("rc4-HMAC wrap-token checksum mismatch")
 	}
 
 	if len(padded) == 0 || padded[len(padded)-1] != 0x01 {
 		return nil, 0, errors.New("invalid RC4-HMAC wrap-token padding")
 	}
-	return padded[:len(padded)-1], uint64(sequence), nil
+	return padded[:len(padded)-1], uint64(sequence), nil //nolint:gosec // sequence is parsed from the 32-bit RC4 token field.
 }
 
 func hmacMD5(key, data []byte) []byte {
