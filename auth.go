@@ -46,7 +46,7 @@ func (c *ClientAuthRequest) Transport(endpoint *Endpoint) error {
 		ResponseHeaderTimeout: endpoint.Timeout,
 	}
 
-	if endpoint.CACert != nil && len(endpoint.CACert) > 0 {
+	if len(endpoint.CACert) > 0 {
 		certPool, err := readCACerts(endpoint.CACert)
 		if err != nil {
 			return err
