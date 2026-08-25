@@ -258,6 +258,50 @@ between the client and KDC will cause authentication to fail. Use the server's
 fully qualified hostname and its registered SPN, normally
 `HTTP/server.example.com`, rather than an IP address.
 
+### Kerberos over HTTP with message encryption
+
+For an HTTP endpoint, enable `MessageEncryption` when constructing the
+Kerberos transport. The endpoint and SPN must use the server hostname, not its
+IP address:
+
+```go
+endpoint := winrm.NewEndpoint("srv-win.example.com", 5985, false, false, nil, nil, nil, 0)
+
+params := *winrm.DefaultParameters
+params.TransportDecorator = func() winrm.Transporter {
+	return &winrm.ClientKerberos{
+		Username:          "alice",
+		Password:          "password",
+		Hostname:          "srv-win.example.com",
+		Realm:             "EXAMPLE.COM",
+		Port:              5985,
+		Proto:             "http",
+		KrbConf:           "/etc/krb5.conf",
+		SPN:               "HTTP/srv-win.example.com",
+		MessageEncryption: true,
+	}
+}
+```
+
+The client first performs the normal `Negotiate` exchange. After the Kerberos
+security context is established, each SOAP message is encrypted using the
+negotiated GSS context. The initial `401` responses are expected; encrypted
+requests do not need to repeat the `Authorization` header.
+
+Before troubleshooting bobwinrm, verify that:
+
+- the client can reach the configured KDC on TCP/UDP port 88;
+- the client and domain controller clocks are synchronized;
+- the configured SPN exists for the target hostname;
+- the hostname resolves to the intended Windows host; and
+- the account has permission to use WinRM on that host.
+
+Message encryption is intended for HTTP. HTTPS already encrypts the transport,
+although message encryption can still be requested explicitly. Kerberos and
+NTLM use the WinRM SPNEGO encrypted-message content type; CredSSP is not yet
+available through the Kerberos encryption constructors. AES enctypes are
+preferred; RC4-HMAC is retained only for legacy interoperability.
+
 
 By passing a Dial in the Parameters struct it is possible to use different dialer (e.g. tunnel through SSH)
 
