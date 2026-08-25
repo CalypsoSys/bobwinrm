@@ -256,8 +256,8 @@ func (c *kerberosInitiatorContext) Wrap(message []byte) ([]byte, error) {
 		return nil, err
 	}
 	// The DCE/IOV header buffer contains the clear GSS header, the encrypted
-	// confounder, the encrypted copy of that header, and the checksum. The
-	// payload is a separate encrypted data buffer.
+	// copy of that header, the checksum, and the encrypted confounder. The
+	// payload is a separate encrypted data buffer after the RRC rotation.
 	signatureLength := len(token) - len(message)
 	if signatureLength > len(token) {
 		return nil, fmt.Errorf("Kerberos wrap token signature length %d exceeds token length %d", signatureLength, len(token))
@@ -336,21 +336,14 @@ func sealKerberosWrapToken(payload []byte, key types.EncryptionKey, usage uint32
 	if err != nil {
 		return nil, 0, 0, fmt.Errorf("encrypt Kerberos wrap token: %w", err)
 	}
-	confounderLength := etype.GetConfounderByteSize()
-	trailerLength := kerberosWrapHeaderLength + etype.GetHMACBitLength()/8
-	if len(ciphertext) < confounderLength+trailerLength {
-		return nil, 0, 0, errors.New("Kerberos encrypted token is shorter than its IOV buffers")
-	}
-	payloadCiphertext := ciphertext[confounderLength : len(ciphertext)-trailerLength]
-	trailerCiphertext := ciphertext[len(ciphertext)-trailerLength:]
-	iovCiphertext := make([]byte, 0, len(ciphertext))
-	iovCiphertext = append(iovCiphertext, ciphertext[:confounderLength]...)
-	iovCiphertext = append(iovCiphertext, trailerCiphertext...)
-	iovCiphertext = append(iovCiphertext, payloadCiphertext...)
+	// MIT's crypto-IOV order is confounder | payload | encrypted header |
+	// checksum. Its DCE buffer placement is obtained by rotating the complete
+	// ciphertext right by the encrypted-header-plus-checksum length.
+	rotateRight(ciphertext, int(rrc))
 
 	token := make([]byte, kerberosWrapHeaderLength+len(ciphertext))
 	copy(token[:kerberosWrapHeaderLength], kerberosWrapHeader(flags, ec, rrc, sequence))
-	copy(token[kerberosWrapHeaderLength:], iovCiphertext)
+	copy(token[kerberosWrapHeaderLength:], ciphertext)
 	return token, rrc, ec, nil
 }
 
@@ -394,18 +387,8 @@ func unsealKerberosWrapToken(token []byte, key types.EncryptionKey, usage uint32
 	if len(token)-kerberosWrapHeaderLength < minimumCiphertext {
 		return nil, 0, fmt.Errorf("Kerberos wrap token ciphertext is too short: got %d, need at least %d", len(token)-kerberosWrapHeaderLength, minimumCiphertext)
 	}
-	wireCiphertext := token[kerberosWrapHeaderLength:]
-	confounderLength := etype.GetConfounderByteSize()
-	trailerLength := kerberosWrapHeaderLength + etype.GetHMACBitLength()/8
-	if len(wireCiphertext) < confounderLength+trailerLength {
-		return nil, 0, errors.New("Kerberos encrypted token is shorter than its IOV buffers")
-	}
-	payloadCiphertext := wireCiphertext[confounderLength+trailerLength:]
-	trailerCiphertext := wireCiphertext[confounderLength : confounderLength+trailerLength]
-	ciphertext := make([]byte, 0, len(wireCiphertext))
-	ciphertext = append(ciphertext, wireCiphertext[:confounderLength]...)
-	ciphertext = append(ciphertext, payloadCiphertext...)
-	ciphertext = append(ciphertext, trailerCiphertext...)
+	ciphertext := append([]byte(nil), token[kerberosWrapHeaderLength:]...)
+	rotateLeft(ciphertext, int(rrc))
 	plaintext, err := etype.DecryptMessage(key.KeyValue, ciphertext, usage)
 	if err != nil {
 		return nil, 0, fmt.Errorf("decrypt Kerberos wrap token: %w", err)
