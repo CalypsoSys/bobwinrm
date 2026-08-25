@@ -7,7 +7,7 @@ DEPS = $(go list -f '{{range .TestImports}}{{.}} {{end}}' ./... | fgrep -v 'winr
 all: deps
 	@mkdir -p bin/
 	@printf "$(OK_COLOR)==> Building$(NO_COLOR)\n"
-	@go build github.com/masterzen/winrm
+	@go build github.com/CalypsoSys/bobwinrm
 
 deps:
 	@printf "$(OK_COLOR)==> Installing dependencies$(NO_COLOR)\n"
@@ -15,7 +15,7 @@ deps:
 	@echo $(DEPS) | xargs -n1 go get -d
 
 updatedeps:
-	go list ./... | xargs go list -f '{{join .Deps "\n"}}' | grep -v github.com/masterzen/winrm | sort -u | xargs go get -f -u -v
+	go list ./... | xargs go list -f '{{join .Deps "\n"}}' | grep -v github.com/CalypsoSys/bobwinrm | sort -u | xargs go get -f -u -v
 
 clean:
 	@rm -rf bin/ pkg/ src/

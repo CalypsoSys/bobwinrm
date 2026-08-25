@@ -7,10 +7,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/CalypsoSys/bobwinrm/soap"
 	"github.com/ChrisTrenkamp/goxpath"
 	"github.com/ChrisTrenkamp/goxpath/tree"
 	"github.com/ChrisTrenkamp/goxpath/tree/xmltree"
-	"github.com/masterzen/winrm/soap"
 )
 
 type ExecuteCommandError struct {
@@ -117,6 +117,10 @@ func ParseSlurpOutputErrResponse(response string, stdout, stderr io.Writer) (boo
 		exitCode int
 	)
 
+	if response == "" {
+		return false, 0, nil
+	}
+
 	doc, err := xmltree.ParseXML(strings.NewReader(response))
 	if err != nil {
 		return false, 0, err
@@ -155,7 +159,14 @@ func ParseSlurpOutputResponse(response string, stream io.Writer, streamType stri
 		exitCode int
 	)
 
+	if response == "" {
+		return false, 0, nil
+	}
+
 	doc, err := xmltree.ParseXML(strings.NewReader(response))
+	if err != nil {
+		return false, 0, err
+	}
 
 	nodes, _ := xPath(doc, fmt.Sprintf("//rsp:Stream[@Name='%s']", streamType))
 	for _, node := range nodes {

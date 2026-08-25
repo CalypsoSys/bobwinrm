@@ -8,7 +8,7 @@ import (
 	"github.com/ChrisTrenkamp/goxpath/tree"
 	"github.com/ChrisTrenkamp/goxpath/tree/xmltree"
 	"github.com/masterzen/simplexml/dom"
-	"github.com/masterzen/winrm/soap"
+	"github.com/CalypsoSys/bobwinrm/soap"
 	. "gopkg.in/check.v1"
 )
 
