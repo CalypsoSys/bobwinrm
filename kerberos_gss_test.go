@@ -117,9 +117,6 @@ func TestKerberosDCEWrapRoundTrip(t *testing.T) {
 				t.Fatalf("outer RRC=%d returned RRC=%d", got, rrc)
 			}
 			wantEC := uint16(0)
-			if test.keyType == etypeID.AES128_CTS_HMAC_SHA1_96 || test.keyType == etypeID.AES256_CTS_HMAC_SHA1_96 {
-				wantEC = 16
-			}
 			if got := binary.BigEndian.Uint16(token[4:6]); got != wantEC {
 				t.Fatalf("outer EC=%d, want %d", got, wantEC)
 			}
@@ -167,8 +164,11 @@ func TestKerberosMessageProtectorWinRMFraming(t *testing.T) {
 	if headerLength <= kerberosWrapHeaderLength || headerLength >= len(outgoing)-4 {
 		t.Fatalf("unexpected WinRM signature length %d for %d-byte message", headerLength, len(outgoing))
 	}
-	if headerLength != kerberosWrapHeaderLength+44 {
-		t.Fatalf("unexpected AES-SHA1 signature length %d, want 60 (RRC=44)", headerLength)
+	if headerLength != 60 {
+		t.Fatalf("unexpected AES-SHA1 signature length %d, want 60 (IOV header)", headerLength)
+	}
+	if len(outgoing)-(4+headerLength) != len("request") {
+		t.Fatalf("unexpected encrypted data length %d, want %d", len(outgoing)-(4+headerLength), len("request"))
 	}
 	reconstructed := append(append([]byte(nil), outgoing[4:4+headerLength]...), outgoing[4+headerLength:]...)
 	request, sequence, err := unsealKerberosWrapToken(reconstructed, key, keyusage.GSSAPI_INITIATOR_SEAL, false)
@@ -179,11 +179,11 @@ func TestKerberosMessageProtectorWinRMFraming(t *testing.T) {
 		t.Fatalf("request=%q sequence=%d next=%d", request, sequence, context.sendSeq)
 	}
 
-	responseToken, responseRRC, _, err := sealKerberosWrapToken([]byte("response"), key, keyusage.GSSAPI_ACCEPTOR_SEAL, kerberosWrapFlagSentByAcceptor|kerberosWrapFlagAcceptorSubkey, 11)
+	responseToken, _, _, err := sealKerberosWrapToken([]byte("response"), key, keyusage.GSSAPI_ACCEPTOR_SEAL, kerberosWrapFlagSentByAcceptor|kerberosWrapFlagAcceptorSubkey, 11)
 	if err != nil {
 		t.Fatal(err)
 	}
-	responseHeaderLength := kerberosWrapHeaderLength + int(responseRRC)
+	responseHeaderLength := len(responseToken) - len("response")
 	response := make([]byte, 4+len(responseToken))
 	binary.LittleEndian.PutUint32(response[:4], uint32(responseHeaderLength))
 	copy(response[4:4+responseHeaderLength], responseToken[:responseHeaderLength])

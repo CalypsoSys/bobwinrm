@@ -251,13 +251,14 @@ func (c *kerberosInitiatorContext) Wrap(message []byte) ([]byte, error) {
 	if c.useSubkey {
 		flags |= kerberosWrapFlagAcceptorSubkey
 	}
-	token, rrc, _, err := sealKerberosWrapToken(message, c.contextKey, keyusage.GSSAPI_INITIATOR_SEAL, flags, c.sendSeq)
+	token, _, _, err := sealKerberosWrapToken(message, c.contextKey, keyusage.GSSAPI_INITIATOR_SEAL, flags, c.sendSeq)
 	if err != nil {
 		return nil, err
 	}
-	// MS-WSMV places the GSS header and the complete rotated region in the
-	// signature part. For AES-SHA1/MS-KILE, RRC includes the EC filler.
-	signatureLength := kerberosWrapHeaderLength + int(rrc)
+	// The DCE/IOV header buffer contains the clear GSS header, the encrypted
+	// confounder, the encrypted copy of that header, and the checksum. The
+	// payload is a separate encrypted data buffer.
+	signatureLength := len(token) - len(message)
 	if signatureLength > len(token) {
 		return nil, fmt.Errorf("Kerberos wrap token signature length %d exceeds token length %d", signatureLength, len(token))
 	}
@@ -321,26 +322,35 @@ func sealKerberosWrapToken(payload []byte, key types.EncryptionKey, usage uint32
 		return nil, 0, 0, fmt.Errorf("get Kerberos encryption type: %w", err)
 	}
 	flags |= kerberosWrapFlagSealed
-	ec := kerberosWrapExtraCount(key.KeyType)
-	// RRC is the complete rotated ciphertext region. In the AES-SHA1/MS-KILE
-	// profile this includes the 16-byte EC filler in addition to the
-	// confounder and checksum.
-	rrc := uint16(etype.GetConfounderByteSize() + etype.GetHMACBitLength()/8 + int(ec))
+	// Windows' DCE/IOV path uses no extra filler. RRC describes the trailer
+	// that is moved into the GSS header buffer; it is not a rotation to apply
+	// to the complete ciphertext stream.
+	ec := uint16(0)
+	rrc := uint16(etype.GetConfounderByteSize() + etype.GetHMACBitLength()/8)
 
 	header := kerberosWrapHeader(flags, ec, 0, sequence)
-	plaintext := make([]byte, 0, len(payload)+int(ec)+len(header))
+	plaintext := make([]byte, 0, len(payload)+len(header))
 	plaintext = append(plaintext, payload...)
-	plaintext = append(plaintext, make([]byte, ec)...)
 	plaintext = append(plaintext, header...)
 	_, ciphertext, err := etype.EncryptMessage(key.KeyValue, plaintext, usage)
 	if err != nil {
 		return nil, 0, 0, fmt.Errorf("encrypt Kerberos wrap token: %w", err)
 	}
-	rotateRight(ciphertext, int(rrc))
+	confounderLength := etype.GetConfounderByteSize()
+	trailerLength := kerberosWrapHeaderLength + etype.GetHMACBitLength()/8
+	if len(ciphertext) < confounderLength+trailerLength {
+		return nil, 0, 0, errors.New("Kerberos encrypted token is shorter than its IOV buffers")
+	}
+	payloadCiphertext := ciphertext[confounderLength : len(ciphertext)-trailerLength]
+	trailerCiphertext := ciphertext[len(ciphertext)-trailerLength:]
+	iovCiphertext := make([]byte, 0, len(ciphertext))
+	iovCiphertext = append(iovCiphertext, ciphertext[:confounderLength]...)
+	iovCiphertext = append(iovCiphertext, trailerCiphertext...)
+	iovCiphertext = append(iovCiphertext, payloadCiphertext...)
 
 	token := make([]byte, kerberosWrapHeaderLength+len(ciphertext))
 	copy(token[:kerberosWrapHeaderLength], kerberosWrapHeader(flags, ec, rrc, sequence))
-	copy(token[kerberosWrapHeaderLength:], ciphertext)
+	copy(token[kerberosWrapHeaderLength:], iovCiphertext)
 	return token, rrc, ec, nil
 }
 
@@ -376,12 +386,26 @@ func unsealKerberosWrapToken(token []byte, key types.EncryptionKey, usage uint32
 	if err != nil {
 		return nil, 0, fmt.Errorf("get Kerberos encryption type: %w", err)
 	}
+	wantRRC := uint16(etype.GetConfounderByteSize() + etype.GetHMACBitLength()/8)
+	if rrc != wantRRC {
+		return nil, 0, fmt.Errorf("unexpected Kerberos DCE RRC %d, want %d", rrc, wantRRC)
+	}
 	minimumCiphertext := etype.GetConfounderByteSize() + etype.GetHMACBitLength()/8 + kerberosWrapHeaderLength + int(ec)
 	if len(token)-kerberosWrapHeaderLength < minimumCiphertext {
 		return nil, 0, fmt.Errorf("Kerberos wrap token ciphertext is too short: got %d, need at least %d", len(token)-kerberosWrapHeaderLength, minimumCiphertext)
 	}
-	ciphertext := append([]byte(nil), token[kerberosWrapHeaderLength:]...)
-	rotateLeft(ciphertext, int(rrc))
+	wireCiphertext := token[kerberosWrapHeaderLength:]
+	confounderLength := etype.GetConfounderByteSize()
+	trailerLength := kerberosWrapHeaderLength + etype.GetHMACBitLength()/8
+	if len(wireCiphertext) < confounderLength+trailerLength {
+		return nil, 0, errors.New("Kerberos encrypted token is shorter than its IOV buffers")
+	}
+	payloadCiphertext := wireCiphertext[confounderLength+trailerLength:]
+	trailerCiphertext := wireCiphertext[confounderLength : confounderLength+trailerLength]
+	ciphertext := make([]byte, 0, len(wireCiphertext))
+	ciphertext = append(ciphertext, wireCiphertext[:confounderLength]...)
+	ciphertext = append(ciphertext, payloadCiphertext...)
+	ciphertext = append(ciphertext, trailerCiphertext...)
 	plaintext, err := etype.DecryptMessage(key.KeyValue, ciphertext, usage)
 	if err != nil {
 		return nil, 0, fmt.Errorf("decrypt Kerberos wrap token: %w", err)
@@ -399,18 +423,6 @@ func unsealKerberosWrapToken(token []byte, key types.EncryptionKey, usage uint32
 		return nil, 0, errors.New("Kerberos wrap token has an invalid extra count")
 	}
 	return plaintext[:payloadLength], sequence, nil
-}
-
-// kerberosWrapExtraCount returns the AES-SHA1 filler required by Microsoft's
-// GSS_WrapEx binding. The AES-SHA1 profile requires a non-zero 16-byte EC;
-// other supported profiles retain the RFC 4121 layout used previously.
-func kerberosWrapExtraCount(keyType int32) uint16 {
-	switch keyType {
-	case etypeID.AES128_CTS_HMAC_SHA1_96, etypeID.AES256_CTS_HMAC_SHA1_96:
-		return 16
-	default:
-		return 0
-	}
 }
 
 func kerberosWrapHeader(flags byte, ec, rrc uint16, sequence uint64) []byte {
