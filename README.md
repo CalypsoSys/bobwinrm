@@ -225,7 +225,7 @@ numbers are stateful.
 
 Kerberos requires a MIT/Heimdal-style `krb5.conf` file. The Go Kerberos
 library reads this file to determine the default realm and how to locate the
-realm's KDC. `ClientKerberos.KrbConf` must point to the file; bobwinrm does not
+realm's KDC. `ClientKerberos.KrbConf` must point to the file; the library does not
 create one or discover its location automatically.
 
 A minimal Active Directory configuration is:
@@ -288,7 +288,7 @@ security context is established, each SOAP message is encrypted using the
 negotiated GSS context. The initial `401` responses are expected; encrypted
 requests do not need to repeat the `Authorization` header.
 
-Before troubleshooting bobwinrm, verify that:
+Before troubleshooting WinRM, verify that:
 
 - the client can reach the configured KDC on TCP/UDP port 88;
 - the client and domain controller clocks are synchronized;
