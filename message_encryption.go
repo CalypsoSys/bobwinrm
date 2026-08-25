@@ -41,6 +41,8 @@ func newWinRMMessageEncryption(protocol string, protector messageProtector) (*wi
 	var protocolString string
 	switch protocol {
 	case "ntlm", "kerberos":
+		// Kerberos follows the SPNEGO WinRM profile here, so it intentionally
+		// uses the same MIME protocol value as NTLM.
 		protocolString = "application/HTTP-SPNEGO-session-encrypted"
 	case "credssp":
 		protocolString = "application/HTTP-CredSSP-session-encrypted"

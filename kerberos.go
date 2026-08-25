@@ -30,10 +30,14 @@ type Settings struct {
 	WinRMMessageEncryption bool
 	KrbRealm               string
 	KrbConfig              string
-	KrbSpn                 string
-	KrbCCache              string
-	WinRMUseNTLM           bool
-	WinRMPassCredentials   bool
+	// KrbSpn is normally HTTP/<fully-qualified-hostname>. It must use the
+	// hostname registered in Active Directory, not an IP address; Kerberos
+	// service-ticket lookup is based on the SPN and IP literals generally do
+	// not have a matching HTTP principal.
+	KrbSpn               string
+	KrbCCache            string
+	WinRMUseNTLM         bool
+	WinRMPassCredentials bool
 }
 
 type ClientKerberos struct {

@@ -297,7 +297,8 @@ func (c *kerberosInitiatorContext) Unwrap(message []byte) ([]byte, error) {
 		return nil, fmt.Errorf("invalid Kerberos signature length %d for payload of %d bytes", signatureLength, len(message))
 	}
 	// WinRM splits the DCE-style GSS token into a signature and data buffer.
-	// Joining the buffers restores the complete token before unrotation.
+	// Joining the buffers restores the complete token before undoing the
+	// rotation.
 	token := append(append([]byte(nil), message[4:4+signatureLength]...), message[4+signatureLength:]...)
 	plaintext, sequence, err := unsealKerberosWrapToken(token, c.contextKey, keyusage.GSSAPI_ACCEPTOR_SEAL, true)
 	if err != nil {
@@ -322,9 +323,11 @@ func sealKerberosWrapToken(payload []byte, key types.EncryptionKey, usage uint32
 		return nil, 0, 0, fmt.Errorf("get Kerberos encryption type: %w", err)
 	}
 	flags |= kerberosWrapFlagSealed
-	// Windows' DCE/IOV path uses no extra filler. RRC describes the trailer
-	// that is moved into the GSS header buffer; it is not a rotation to apply
-	// to the complete ciphertext stream.
+	// Windows' WinRM GSS IOV path uses EC=0 and RRC=confounder+checksum
+	// (28 bytes for AES-SHA1). This is an observed wire-format invariant from
+	// live Windows WinRM and a working GSSAPI IOV client. RFC 4121's baseline
+	// description and MS-KILE's generic EC guidance are misleading for this
+	// WinRM format; do not simplify this back to an EC=16 token.
 	ec := uint16(0)
 	rrc := uint16(etype.GetConfounderByteSize() + etype.GetHMACBitLength()/8)
 
@@ -337,8 +340,10 @@ func sealKerberosWrapToken(payload []byte, key types.EncryptionKey, usage uint32
 		return nil, 0, 0, fmt.Errorf("encrypt Kerberos wrap token: %w", err)
 	}
 	// MIT's crypto-IOV order is confounder | payload | encrypted header |
-	// checksum. Its DCE buffer placement is obtained by rotating the complete
-	// ciphertext right by the encrypted-header-plus-checksum length.
+	// checksum. Its WinRM buffer placement is obtained by rotating the
+	// complete ciphertext right by the encrypted-header-plus-checksum length:
+	// clear header | encrypted header | checksum | encrypted confounder |
+	// encrypted payload.
 	rotateRight(ciphertext, int(rrc))
 
 	token := make([]byte, kerberosWrapHeaderLength+len(ciphertext))

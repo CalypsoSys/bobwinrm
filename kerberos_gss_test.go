@@ -167,6 +167,13 @@ func TestKerberosMessageProtectorWinRMFraming(t *testing.T) {
 	if headerLength != 60 {
 		t.Fatalf("unexpected AES-SHA1 signature length %d, want 60 (IOV header)", headerLength)
 	}
+	token := outgoing[4:]
+	if got := binary.BigEndian.Uint16(token[4:6]); got != 0 {
+		t.Fatalf("unexpected AES-SHA1 EC %d, want 0", got)
+	}
+	if got := binary.BigEndian.Uint16(token[6:8]); got != 28 {
+		t.Fatalf("unexpected AES-SHA1 RRC %d, want 28", got)
+	}
 	if len(outgoing)-(4+headerLength) != len("request") {
 		t.Fatalf("unexpected encrypted data length %d, want %d", len(outgoing)-(4+headerLength), len("request"))
 	}
