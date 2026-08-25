@@ -207,7 +207,7 @@ func kerberosResponseMechanismToken(token []byte) ([]byte, error) {
 		return nil, fmt.Errorf("parse SPNEGO response: %w", err)
 	}
 	if !response.Resp || len(response.NegTokenResp.ResponseToken) == 0 {
-		return nil, errors.New("SPNEGO response does not contain a Kerberos response token")
+		return nil, errors.New("spnego response does not contain a Kerberos response token")
 	}
 	return response.NegTokenResp.ResponseToken, nil
 }
@@ -260,7 +260,7 @@ func (c *kerberosInitiatorContext) Wrap(message []byte) ([]byte, error) {
 	// payload is a separate encrypted data buffer after the RRC rotation.
 	signatureLength := len(token) - len(message)
 	if signatureLength > len(token) {
-		return nil, fmt.Errorf("Kerberos wrap token signature length %d exceeds token length %d", signatureLength, len(token))
+		return nil, fmt.Errorf("kerberos wrap token signature length %d exceeds token length %d", signatureLength, len(token))
 	}
 
 	result := make([]byte, 4+len(token))
@@ -275,7 +275,7 @@ func (c *kerberosInitiatorContext) Unwrap(message []byte) ([]byte, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if !c.established {
-		return nil, errors.New("Kerberos security context is not established")
+		return nil, errors.New("kerberos security context is not established")
 	}
 	if c.contextKey.KeyType == etypeID.RC4_HMAC {
 		plaintext, sequence, err := unwrapKerberosRC4Message(message, c.contextKey, true)
@@ -470,7 +470,7 @@ func wrapKerberosRC4Message(payload []byte, key types.EncryptionKey, sequence ui
 	token := make([]byte, 32)
 	copy(token[:8], []byte{0x02, 0x01, 0x11, 0x00, 0x10, 0x00, 0xff, 0xff})
 	sequencePlain := make([]byte, 8)
-	binary.BigEndian.PutUint32(sequencePlain[:4], uint32(sequence)) //nolint:gosec // sequence was checked to fit the 32-bit RC4 field.
+	binary.BigEndian.PutUint32(sequencePlain[:4], uint32(sequence))
 	if fromAcceptor {
 		copy(sequencePlain[4:], []byte{0xff, 0xff, 0xff, 0xff})
 	}
@@ -513,7 +513,7 @@ func wrapKerberosRC4Message(payload []byte, key types.EncryptionKey, sequence ui
 
 	signature := append(append([]byte(nil), kerberosRC4GSSHeader...), token...)
 	result := make([]byte, 4+len(signature)+len(encryptedPayload))
-	binary.LittleEndian.PutUint32(result[:4], uint32(len(signature)))
+	binary.LittleEndian.PutUint32(result[:4], uint32(len(signature))) //nolint:gosec // WinRM length fields are 32-bit and the buffer is bounded by memory.
 	copy(result[4:4+len(signature)], signature)
 	copy(result[4+len(signature):], encryptedPayload)
 	return result, nil
