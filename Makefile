@@ -7,7 +7,7 @@ DEPS = $(go list -f '{{range .TestImports}}{{.}} {{end}}' ./... | fgrep -v 'winr
 all: deps
 	@mkdir -p bin/
 	@printf "$(OK_COLOR)==> Building$(NO_COLOR)\n"
-	@go build github.com/CalypsoSys/bobwinrm
+	@go build github.com/masterzen/winrm
 
 deps:
 	@printf "$(OK_COLOR)==> Installing dependencies$(NO_COLOR)\n"
