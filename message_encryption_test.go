@@ -34,7 +34,7 @@ func TestWinRMMessageEncryptionRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := encryption.contentType(); got != `multipart/encrypted;protocol="application/HTTP-Kerberos-session-encrypted";boundary="Encrypted Boundary"` {
+	if got := encryption.contentType(); got != `multipart/encrypted;protocol="application/HTTP-SPNEGO-session-encrypted";boundary="Encrypted Boundary"` {
 		t.Fatalf("unexpected Kerberos content type %q", got)
 	}
 
