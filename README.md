@@ -221,6 +221,43 @@ usually fails because it does not identify the host's registered service
 principal. A `ClientKerberos` serializes requests because GSS message sequence
 numbers are stateful.
 
+### Kerberos configuration
+
+Kerberos requires a MIT/Heimdal-style `krb5.conf` file. The Go Kerberos
+library reads this file to determine the default realm and how to locate the
+realm's KDC. `ClientKerberos.KrbConf` must point to the file; bobwinrm does not
+create one or discover its location automatically.
+
+A minimal Active Directory configuration is:
+
+```ini
+[libdefaults]
+    default_realm = EXAMPLE.COM
+    dns_lookup_kdc = false
+    dns_lookup_realm = false
+
+[realms]
+    EXAMPLE.COM = {
+        kdc = dc01.example.com
+        admin_server = dc01.example.com
+    }
+
+[domain_realm]
+    .example.com = EXAMPLE.COM
+    example.com = EXAMPLE.COM
+```
+
+Replace the realm, domain, and domain-controller names with values from the
+Active Directory environment. A domain controller provides the KDC service,
+normally on TCP and UDP port 88. Instead of listing a KDC explicitly, DNS SRV
+discovery can be enabled with `dns_lookup_kdc = true`, provided the client can
+resolve the domain's `_kerberos._tcp` records.
+
+Kerberos also requires synchronized clocks; a substantial time difference
+between the client and KDC will cause authentication to fail. Use the server's
+fully qualified hostname and its registered SPN, normally
+`HTTP/server.example.com`, rather than an IP address.
+
 
 By passing a Dial in the Parameters struct it is possible to use different dialer (e.g. tunnel through SSH)
 
