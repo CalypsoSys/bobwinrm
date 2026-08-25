@@ -251,11 +251,11 @@ func (c *kerberosInitiatorContext) Wrap(message []byte) ([]byte, error) {
 	if c.useSubkey {
 		flags |= kerberosWrapFlagAcceptorSubkey
 	}
-	token, rrc, err := sealKerberosWrapToken(message, c.contextKey, keyusage.GSSAPI_INITIATOR_SEAL, flags, c.sendSeq)
+	token, rrc, ec, err := sealKerberosWrapToken(message, c.contextKey, keyusage.GSSAPI_INITIATOR_SEAL, flags, c.sendSeq)
 	if err != nil {
 		return nil, err
 	}
-	signatureLength := kerberosWrapHeaderLength + int(rrc)
+	signatureLength := kerberosWrapHeaderLength + int(rrc) + int(ec)
 	if signatureLength > len(token) {
 		return nil, fmt.Errorf("Kerberos wrap token signature length %d exceeds token length %d", signatureLength, len(token))
 	}
@@ -307,16 +307,16 @@ func (c *kerberosInitiatorContext) Unwrap(message []byte) ([]byte, error) {
 	return plaintext, nil
 }
 
-func sealKerberosWrapToken(payload []byte, key types.EncryptionKey, usage uint32, flags byte, sequence uint64) ([]byte, uint16, error) {
+func sealKerberosWrapToken(payload []byte, key types.EncryptionKey, usage uint32, flags byte, sequence uint64) ([]byte, uint16, uint16, error) {
 	if key.KeyType == etypeID.RC4_HMAC {
-		return nil, 0, errors.New("RC4-HMAC uses RFC 1964 wrap tokens, not RFC 4121 CFX tokens")
+		return nil, 0, 0, errors.New("RC4-HMAC uses RFC 1964 wrap tokens, not RFC 4121 CFX tokens")
 	}
 	if err := validateKerberosMessageEncryptionEType(key.KeyType); err != nil {
-		return nil, 0, err
+		return nil, 0, 0, err
 	}
 	etype, err := crypto.GetEtype(key.KeyType)
 	if err != nil {
-		return nil, 0, fmt.Errorf("get Kerberos encryption type: %w", err)
+		return nil, 0, 0, fmt.Errorf("get Kerberos encryption type: %w", err)
 	}
 	flags |= kerberosWrapFlagSealed
 	rrc := uint16(etype.GetConfounderByteSize() + etype.GetHMACBitLength()/8)
@@ -329,14 +329,14 @@ func sealKerberosWrapToken(payload []byte, key types.EncryptionKey, usage uint32
 	plaintext = append(plaintext, header...)
 	_, ciphertext, err := etype.EncryptMessage(key.KeyValue, plaintext, usage)
 	if err != nil {
-		return nil, 0, fmt.Errorf("encrypt Kerberos wrap token: %w", err)
+		return nil, 0, 0, fmt.Errorf("encrypt Kerberos wrap token: %w", err)
 	}
 	rotateRight(ciphertext, int(rrc)+int(ec))
 
 	token := make([]byte, kerberosWrapHeaderLength+len(ciphertext))
 	copy(token[:kerberosWrapHeaderLength], kerberosWrapHeader(flags, ec, rrc, sequence))
 	copy(token[kerberosWrapHeaderLength:], ciphertext)
-	return token, rrc, nil
+	return token, rrc, ec, nil
 }
 
 func unsealKerberosWrapToken(token []byte, key types.EncryptionKey, usage uint32, expectFromAcceptor bool) ([]byte, uint64, error) {

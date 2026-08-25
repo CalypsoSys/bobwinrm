@@ -109,7 +109,7 @@ func TestKerberosDCEWrapRoundTrip(t *testing.T) {
 			key := types.EncryptionKey{KeyType: test.keyType, KeyValue: test.key}
 			plaintext := []byte("the WinRM SOAP message")
 			const sequence = uint64(42)
-			token, rrc, err := sealKerberosWrapToken(plaintext, key, keyusage.GSSAPI_ACCEPTOR_SEAL, kerberosWrapFlagSentByAcceptor, sequence)
+			token, rrc, ec, err := sealKerberosWrapToken(plaintext, key, keyusage.GSSAPI_ACCEPTOR_SEAL, kerberosWrapFlagSentByAcceptor, sequence)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -122,6 +122,9 @@ func TestKerberosDCEWrapRoundTrip(t *testing.T) {
 			}
 			if got := binary.BigEndian.Uint16(token[4:6]); got != wantEC {
 				t.Fatalf("outer EC=%d, want %d", got, wantEC)
+			}
+			if got := uint16(binary.BigEndian.Uint16(token[4:6])); got != ec {
+				t.Fatalf("returned EC=%d, outer EC=%d", ec, got)
 			}
 			decrypted, gotSequence, err := unsealKerberosWrapToken(token, key, keyusage.GSSAPI_ACCEPTOR_SEAL, true)
 			if err != nil {
@@ -153,6 +156,9 @@ func TestKerberosMessageProtectorWinRMFraming(t *testing.T) {
 	if headerLength <= kerberosWrapHeaderLength || headerLength >= len(outgoing)-4 {
 		t.Fatalf("unexpected WinRM signature length %d for %d-byte message", headerLength, len(outgoing))
 	}
+	if headerLength != kerberosWrapHeaderLength+28+16 {
+		t.Fatalf("unexpected AES-SHA1 signature length %d, want 60", headerLength)
+	}
 	reconstructed := append(append([]byte(nil), outgoing[4:4+headerLength]...), outgoing[4+headerLength:]...)
 	request, sequence, err := unsealKerberosWrapToken(reconstructed, key, keyusage.GSSAPI_INITIATOR_SEAL, false)
 	if err != nil {
@@ -162,11 +168,11 @@ func TestKerberosMessageProtectorWinRMFraming(t *testing.T) {
 		t.Fatalf("request=%q sequence=%d next=%d", request, sequence, context.sendSeq)
 	}
 
-	responseToken, responseRRC, err := sealKerberosWrapToken([]byte("response"), key, keyusage.GSSAPI_ACCEPTOR_SEAL, kerberosWrapFlagSentByAcceptor|kerberosWrapFlagAcceptorSubkey, 11)
+	responseToken, responseRRC, responseEC, err := sealKerberosWrapToken([]byte("response"), key, keyusage.GSSAPI_ACCEPTOR_SEAL, kerberosWrapFlagSentByAcceptor|kerberosWrapFlagAcceptorSubkey, 11)
 	if err != nil {
 		t.Fatal(err)
 	}
-	responseHeaderLength := kerberosWrapHeaderLength + int(responseRRC)
+	responseHeaderLength := kerberosWrapHeaderLength + int(responseRRC) + int(responseEC)
 	response := make([]byte, 4+len(responseToken))
 	binary.LittleEndian.PutUint32(response[:4], uint32(responseHeaderLength))
 	copy(response[4:4+responseHeaderLength], responseToken[:responseHeaderLength])
@@ -183,7 +189,7 @@ func TestKerberosMessageProtectorWinRMFraming(t *testing.T) {
 
 func TestKerberosWrapRejectsTamperingAndBadSequence(t *testing.T) {
 	key := types.EncryptionKey{KeyType: etypeID.AES128_CTS_HMAC_SHA1_96, KeyValue: []byte("0123456789abcdef")}
-	token, rrc, err := sealKerberosWrapToken([]byte("response"), key, keyusage.GSSAPI_ACCEPTOR_SEAL, kerberosWrapFlagSentByAcceptor, 3)
+	token, _, _, err := sealKerberosWrapToken([]byte("response"), key, keyusage.GSSAPI_ACCEPTOR_SEAL, kerberosWrapFlagSentByAcceptor, 3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,11 +198,11 @@ func TestKerberosWrapRejectsTamperingAndBadSequence(t *testing.T) {
 		t.Fatal("tampered token was accepted")
 	}
 
-	valid, rrc, err := sealKerberosWrapToken([]byte("response"), key, keyusage.GSSAPI_ACCEPTOR_SEAL, kerberosWrapFlagSentByAcceptor, 3)
+	valid, rrc, ec, err := sealKerberosWrapToken([]byte("response"), key, keyusage.GSSAPI_ACCEPTOR_SEAL, kerberosWrapFlagSentByAcceptor, 3)
 	if err != nil {
 		t.Fatal(err)
 	}
-	headerLength := kerberosWrapHeaderLength + int(rrc)
+	headerLength := kerberosWrapHeaderLength + int(rrc) + int(ec)
 	framed := make([]byte, 4+len(valid))
 	binary.LittleEndian.PutUint32(framed[:4], uint32(headerLength))
 	copy(framed[4:4+headerLength], valid[:headerLength])
